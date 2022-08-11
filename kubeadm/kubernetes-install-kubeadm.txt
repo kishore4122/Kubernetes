@@ -1,0 +1,154 @@
+
+1)System Requirements
+
+Master: t2.medium(2 CPU's and 2GB Memory)
+Worker: t2.micro
+
+2) Open below ports in the Security Group
+Master : 6443, 32750, 10250, 4443, 443, 8080, 179
+Worker : 179
+
+
+Install these on Master and Worker nodes
+================********=================
+3) Perform all the commands as root user unless otherwise specified
+
+sudo su -
+Install Enable and start docker service. Use Docker repository to install docker
+
+If you use docker from Centos OS repository, the docker version might be old to workk with kubernetes v1.13.0 and above
+
+$yum install -y -q yum-utils device-mapper-persistent-data lvm2 > /dev/null 2>&1
+$yum config-manager --add-repo https://download.docker.com/linux/ccentos/docker-ce.repo > /dev/null 2>&1
+$yum install -y -q docker-ce > /dev/null 2>&1
+
+4)Start Docker Service
+$systemctl start docker
+$systemctl enable docker
+
+5)Disable SELinux
+setenforce 0
+sed -i --follow-symlinks 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/sysconfig/selinux
+
+# Set SELinux in permissive mode (effectively disabling it)
+sudo setenforce 0
+sudo sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config
+
+
+6)Disable Firewall
+$systemctl disable firewalld
+$systemctl stop firewalld
+
+7)Disable Swap Space
+sed -i '/swap/d' /etc/fstab
+swapoff -a
+
+8)Update sysctl settings for kubernetes networking
+cat >> /etc/sysctl.d/kubernetes.conf <<EOF
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+
+sysctl --system (Load settings from all system configuration files)
+
+
+Kubernetes Setup
+========****=======
+1) Add yum repository for kubernetes package
+
+cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+exclude=kubelet kubeadm kubectl
+EOF
+
+
+2) Install Kubernetes
+
+sudo yum install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
+
+3) Enable and start kubelet service
+
+sudo systemctl enable --now kubelet
+
+$systemctl enable kubelet
+$systemctl start kubelet
+
+
+ON MASTER NODE:
+======****======
+1) Initializ Kubernetes Cluster
+
+kubeadm init --apiserver-advertise-address=<Master Server Private IP> --pod-network-cidr=192.168.0.0/16
+
+kubeadm init --control-plane-endpoint k8smaster:6443 --pod-network-cidr=10.10.0.0/16
+
+
+if you got any error like cgroup. follow the below steps
+1)systemctl stop docker
+2) /etc/systemd/system/multi-user.target.wants/docker.service
+		ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock --exec-opt native.cgroupdriver=systemd
+3)`systemctl daemon-reload`
+    `systemctl start docker`
+4)kubeadm reset
+5)now initialize kubeadm
+
+2)Create a user for Kubernetes administration and copy kube config file
+To be able to use kubectl command to connect and interact with the cluster the user needs kube configfile
+In this case we are creating a user called kubeadmin
+
+$useradd kubeadmin
+mkdir /home/kubeadmin/.kube
+cp /etc/kubernetes/admin.conf /home/kubeadmin/.kube/config
+chown -R kubeadmin:kubeadmin /home/kubeadmin/.kube
+
+3)Deploy Calico network as a "kubeadmin" user
+this should be executed as a user (here as a kubeadmin)
+
+sudo su - kubeadmin
+
+kubectl create -f https://docs.projectcalico.org/v3.9/manifests/calico.yaml
+
+4)Cluster Join command
+kubeadm token create --print-join-command
+
+ON Worker NODE
+----------------
+switch to root
+
+Add worker nodes to cluster 
+
+use the output from the kubeadm token create command in previous step from the master server and run here
+Verifyin the cluster to get Nodes status
+
+$kubectl get nodes
+
+To get component status
+
+$kubecctl get pods
+
+
+kubeclt get pods -n kube-system
+
+
+#Create a New token
+sudo kubeadm token create
+
+#To list the tokens
+sudo kubeadm token list
+
+#Find certificate hash on master
+openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | \
+   openssl dgst -sha256 -hex | sed 's/^.* //'
+
+#Join the nodes
+sudo kudeadm join --token <token> <control-plane-host>:<control-plane-port> --discovery-token-ca-cert-hash sha256:<hash>
+
+sudo kudeadm join --token e5e8rp.j2sqlo02aa4k2myy k8smaster:6443 --discovery-token-ca-cert-hash sha256:a7ee55256230458663df69eeda181e27c49c3e3c261d2aaa9d92b345801cccf0
+	
+kubeadm join <control-plane-host>:<control-plane-port> --token <token> --discovery-token-ca-cert-hash sha256:<hash>

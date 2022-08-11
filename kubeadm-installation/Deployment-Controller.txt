@@ -1,0 +1,368 @@
+Deployment
+**********
+	• Deployments are intended to replace Replication Controllers and it provides declarative updates for Pods and ReplicaSets
+	• Deployments describe the number of desired identical pod replicas to run and the preferred update strategy used when updating the deployment
+	• Kubernetes will track pod health and will remove or add pods as needed to bring your application deployment to the desired state
+	• By default, Kubernetes performs deployments in rolling update strategy
+	• It seems similar to ReplicaSets but with advanced functions like Rolling update, Rollback, Pause and resume the update etc
+	• Deployment is the recommended way to deploy a pod or Replica Set
+
+
+	• Deployment owns and manages one or more ReplicaSets and ReplicaSet manages the Pod replicas 
+	• Deployment manages multiple ReplicaSets to support rollback mechanism
+	• Kubernetes creates a new ReplicaSet each time a new Deployment config is deployed and also keeps the old ReplicaSet so we can rollback to the previous state with old ReplicaSet
+
+
+									Deployment
+										|
+				-------------------------------------------------
+				|						|						|
+				|						|						|
+			ReplicaSet 				ReplicaSet 				ReplicaSet
+				V1						V2						V3
+				|						|						|
+			---------				---------				---------
+			|		|				|		|				|		|
+		   Pod 	   Pod 			   Pod 	   Pod 			   Pod 	   Pod
+
+
+
+• Create the deployment using imperative command
+	kubectl create deployment nginx --image nginx --replicas=5 --port=80 --dry-run=client #check with dry run 
+
+	kubectl create deployment nginx --image nginx --replica=5 --port=80
+	kubectl get deployment nginx  #get deployment details; here nginx indicates deployment name
+	kubectl describe deployment nginx  #get detailed information of the deployment 
+
+	kubectl get deploy -o wide
+	kubectl get po -o wide
+	kubectl get rs
+
+	kubectl delete deploy nginx
+
+
+
+
+• Create the deployment using declartive
+
+example: deployment.yml
+-----------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-deployment
+  labels:
+    app: web-development
+    env: dev
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx-container
+        image: nginx
+
+
+
+   kubectl create -f deployment.yml --record #it will record the events in deployment
+
+   kubectl rollout status deploy <deployment_name>
+   kubectl rollout pause deploy <deployment_name>
+   kubectl rollout history deploy <deployment_name>
+   kubectl rollout undo deploy <deployment_name>
+   kubectl rollout status deploy <deployment_name> --to-revision=<number>
+
+   kubectl apply -f deployment.yml
+
+   kubectl get deploy
+   kubectl get rs
+   kubectl get po
+
+   kubectl scale deploy  myapp-deployment --replicas=10
+
+   kubectl edit deploy myapp-deployment
+
+   kubectl set image deploy <deployment_name> <old image_name>=<new image_name>
+   kubectl set image deploy myapp-deployment nginx=nginx:1.6.1
+   kubectl set image deploy myapp-deployment nginx=nginx:1.6.1 --record
+
+   kubectl delete deploy <deplyment_name>
+   kubectl delete -f deployment.yml
+
+   kubectl describe deploy <deployment_name>
+
+
+Rolling update strategy
+***********************
+	• By default, deployment ensures that only 25% of your pods are unavailable during an update and does not update more that 25% of the pods at a given time
+	• It does not kill old pods until/unless enough new pods come up
+	• It does not create new pods until a sufficient number of old pods are killed
+	
+	• There are two settings you can tweak to control the process: maxUnavailable and maxSurge. Both have the default values set to 25%
+	
+	• The maxUnavailable setting specifies the maximum number of pods that can be unavailable during the rollout process. You can set it to an actual number(integer) or a percentage of desired pods
+		▪ When maxUnavailable is set to 40%. When the update starts, the old ReplicaSet is scaled down to 60%.
+		▪ As soon as new pods are started and ready, the old ReplicaSet is scaled down again and the new ReplicaSet is scaled up. This happens in such a way that the total number of available pods (old and new, since we are scaling up and down) is always at least 60%
+
+	• The maxSurge setting specifies the maximum number of pods that can be created over the desired number of pods
+		• If we use the percentage as 40%, the new ReplicaSet is scaled up right away when the rollout starts. The new ReplicaSet will be scaled up in such a way that it does not exceed 140% of desired pods. As old pods get killed, the new Replica Set scales up again, making sure it never goes over the 140% of desired pods
+
+
+maxSurge:
+---------
+	1 means that there will be at most 4 pods during the update process if replicas is 3 
+maxUnavailable:
+---------------
+	1 means that there will be at most 1 pod unavailable during the update process. It can also have the value of 0
+
+Note: maxUnavailable cannot be 0 if maxSurge is set to 0
+
+strategy: 
+  type: RollingUpdate 
+	rollingUpdate: 
+	  maxSurge: 1
+	  maxUnavailable: 1
+
+
+
+
+
+
+Deployment strategies
+*********************
+	• Whenever we create a new deployment, K8s triggers a Rollout
+	• Rollout is the process of gradually deploying or upgrading your application containers
+	• For every rollout/upgrade, a version history will be created, which helps in rolling back to working version in case of an update failure
+	• In Kubernetes there are a few different ways to release updates to an application
+		1. Recreate: terminate the old version and release the new one. Application experiences downtime.
+		2. Rolling Update: release a new version on a rolling update fashion, one after the other. It's the default strategy in K8s. No application downtime is required.
+		3. Blue/green: release a new version alongside the old version then switch traffic 
+		4. Canary: release a new version to a subset of users, then proceed to a full rollout
+		5. A/B testing: release a new version to a subset of users in a precise way (HTTP headers, cookie, weight, etc.). This doesn't come out of the box with Kubernetes, it implies extra work to setup a more advanced infrastructure like Service Mesh (Istio, Linkerd, Traefik, custom nginx/haproxy, etc)
+
+	https://github.com/ContainerSolutions/k8s-deployment-strategies
+
+Recreate Update
+***************
+	• Version A is terminated then version B is rolled out
+	• Easy to deploy but expect application downtime
+
+		spec:
+		  replicas: 10 
+		strategy: 
+		  type: Recreate
+
+Rolling/Ramped Update
+**********************
+	Version B is slowly rolled out and replacing version A
+
+		spec: 
+		  replicas: 10
+		strategy:
+		  type: Rolling Update
+		  rollingUpdate: 
+		  maxSurge: 2 
+		  maxUnavailable: 0
+
+Blue/Green strategy
+*******************
+	• Release a new version (green) alongside the old version (blue) then switch traffic 
+	• Instant rollout/rollback at the expense of doubling the resources in the cluster
+
+
+Canary strategy
+***************
+	• Release a new version alongside the old version but split traffic between the versions based on weight
+	• For example, 90 percent of the requests go to version A, 10 percent go to version B
+
+
+A/B testing strategy
+********************
+	• In this strategy, traffic is directed among various versions depending on users based parameters like cookie, user agent, etc.
+	• Routing can be controlled by
+		• Cookies / Headers
+		• Query parameters
+		• Geo localization
+		• browser version, screen size, operating system, etc.
+	• Istio can implement this routing based on weights and/or HTTP headers
+
+
+
+
+
+
+
+apiVersion: apps/v1 
+kind: Deployment 
+metadata:
+  name: nginx
+spec: 
+  replicas: 5 
+  selector:
+    matchLabels: 
+      app: nginx
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: 
+	  maxSurge: 0 
+	  maxUnavailable: 1
+  template:
+	metadata:
+	  Labels:
+		app: nginx
+	spec:
+	  containers:
+	  - image: nginx 
+		name: nginx
+		ports:
+		- containerPort: 80
+
+
+kubectl create -f deployment.yml --record #it will record the events in deployment
+kubectl rollout status deploy <deloyment_name> # see the status of deployment
+
+
+
+   kubectl rollout status deploy <deployment_name>
+   kubectl rollout pause deploy <deployment_name>
+   kubectl rollout history deploy <deployment_name>
+   kubectl rollout undo deploy <deployment_name>
+   kubectl rollout status deploy <deployment_name> --to-revision=<number>
+
+   kubectl apply -f deployment.yml
+
+   kubectl get deploy
+   kubectl get rs
+   kubectl get po
+
+   kubectl scale deploy  myapp-deployment --replicas=10
+
+   kubectl edit deploy myapp-deployment
+
+   kubectl set image deploy <deployment_name> <old image_name>=<new image_name>
+   kubectl set image deploy myapp-deployment nginx=nginx:1.6.1
+   kubectl set image deploy myapp-deployment nginx=nginx:1.6.1 --record
+
+   kubectl delete deploy <deplyment_name>
+   kubectl delete -f deployment.yml
+
+   kubectl describe deploy <deployment_name>
+
+
+
+
+
+Create the deployment using imperative command
+	kubectl create deployment nginx --image=nginx --replicas=5 --port=80 --dry-run-client-check with dry run 
+
+	kubectl create deployment nginx --image nginx --replicas=5 --port=80
+
+	kubectl get deployment nginx - get deployment details; here nginx indicates deployment name 
+
+	kubectl describe deployment nginx - get detailed information of the deployment
+
+Get ReplicaSets for the deployment
+	kubectl get rs or kubectl get all - to fetch pods, rs, deployments, services etc
+
+Get pods for the deployment 
+	kubectl get po -o wide
+
+Scale the deployment to 10 instances 
+	kubectl scale deployment nginx --replicas=10
+
+Edit the deployment
+	kubectl edit deployment nginx - Make live changes to the yaml like increasing replica count or container image etc., and save to reflect
+
+Set new image for the containers 
+	kubectl set image deployment nginx nginx:1.15.1=nginx:1.16.1 - new image that replaces old image
+
+Delete the deployment 
+	kubecl delete deployment nginx
+
+
+Create the deployment using declarative approach
+	kubectl create -f deployment-rolling-update.yml --record (--record will record the events in the deployment)
+
+Status the deployment
+	kubectl rollout status deployment nginx
+
+Rollout history
+	kubectl rollout history deployment nginx - shows history of all the upgrades to the deployment
+
+Set new image
+	kubectl set image deployment <deployment> <container>=<image> --record 
+	kubectl set image deployment nginx nginx=nginx:1.14 --record
+
+Scale the deployment
+	kubectl scale deployment nginx --replicas=10
+
+Undo rollout
+	kubectl rollout undo deployment nginx - this will rollback to previous version
+
+Rollback to specific version
+	kubectl rollout undo deployment nginx --to-revision=2
+
+Pause a rollout
+	kubectl rollout pause deployment nginx
+
+Replace the changes
+	kubectl replace -f <yaml> --record - if new changes are made in the YAML file
+
+Edit the deployment
+	kubectl edit deployment <deployment> --record
+
+Delete the deployment
+	kubectl delete -f deployment-rolling-update.yml
+	or
+	kubectl delete deployment nginx
+
+
+deployment_definition.yml
+-------------------------
+	apiVersion: apps/v1 
+	kind: Deployment
+	metadata:
+	  name: myapp-deployment
+	  labels:
+	    app: web-development 
+			env: dev
+	spec:
+	  replicas: 10
+	  selector:
+	    matchLabels:
+				app: nginx
+		strategy:
+		  type: RollingUpdate
+		  maxSurge: 0
+		  maxUnavaliable: 1
+		template:
+			metadata:
+				name: myapp-pod
+				labels:
+					app: nginx
+			spec:
+				containers:
+				- name: nginx-container 
+					image: nginx
+
+
+
+
+
+
+
+
+
+Namespaces
+**********
+	1. You can restrict a user access to a specific namespace so as to protect the workloads/objects from being deleted which are owned by other users/projects 
+	2. Namespaces provide a scope for names. Names of (pod, deployments etc) need to be unique within a namespace, but not across namespaces
+	3. So, each Kubernetes namespace provides the scope for Kubernetes Names it contains; which means using the combination of an object name and a namespace, each object gets a unique identity across the cluster 
+	4. Not all objects in Kubernetes are namespaced. Ex: objects like nodes and persistentVolumes are not bound to a specific namespace. They are cluster wide resources to be accessible by all objects in the cluster

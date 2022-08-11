@@ -1,0 +1,111 @@
+Docker CLI with Minikube:
+-------------------------
+	Download docker package from https://download.docker.com/win/static/stable/x86_64/ 
+	Extract and move only docker.exe to C:\Windows\System32
+
+	eval $(minikube docker-env)
+	docker ps
+
+	Download and move kubectl to C:\Windows\System32
+
+Minikube
+--------
+	1. minikube is local Kubernetes, focusing on making it easy to learn and develop for Kubernetes 
+	2. It creates a single node cluster
+	3. Available for Linux, macOS, and Windows
+	4. Inbuilt support for Metallb, dashboard, storage provisioners etc 
+	5. Master node is untainted
+
+		Prerequisites:
+		-------------
+			1. 2 CPUs or more
+			2. 2GB of free memory
+			3. 20GB of free disk space 
+			4. Internet connection
+			5. Container or virtual machine manager, such as: Docker, Hyperkit, Hyper-V, KVM, Podman, VirtualBox, or VMWare
+
+
+	https://minikube.sigs.k8s.io/docs/start/
+
+1. Start Minikube Cluster 	- minikube start --driver=virtualbox --memory=4096 --cpus=4 --kubernetes-version=v1.20.2
+2. Get Minikube IP 			- minikube ip
+3. Get Minikube Addons 		- minikube addons list
+4. Enable MetalLB Addon 	– minikube addons enable metallb (installs some objects under metallb-system namespace)
+5. Configure MetalLB 		- minikube addons configure metallb (configure the range of LoadBalancer IPs depending on Minikube IP)
+
+
+Issues:
+-------
+If you got any errors while starting the Minikube like: This computer doesn't have VT-X/AMD-v enabled. 
+	then enable it : Enable VT-X/AMD-V (or) Disable vtx check - minikube start --no-vtx-check 
+
+	https://github.com/kubernetes/minikube/issues/9130
+
+Turn off Windows features Hyper-V, Virtual Machine Platform, and Windows Hypervisor Platform to be able to use VirtualBox
+Unfortunately, removing Virtual Machine Platform means you won't be able to use WSL.
+
+
+
+TO Start the minikube:
+----------------------
+1. $minikube start --no-vtx-check --driver-virtualbox
+	Done! kubectl is now configured to use "minikube" cluster and "default" namespace by default
+
+2. Multinode Minikube Cluster with a different CNI:
+	$minikube start -n=4 --cni='calico' --container-runtime='containerd'
+
+	$minikube start --driver=virtualbox --memory=4096 --cpus=4 --kubernetes-version=v1.20.2
+
+3. Enable Dashboard addon
+		$minikube addons enable dashboard
+		$minikube addons enable metrics-server 
+
+		$minikube dashboard --url
+
+4. Stop Minikube
+		$minikube stop
+
+5. Delete Minikube cluster 
+	$minikube delete
+
+Demp APP:
+---------
+1. Get nodes in the cluster
+	$kubectl get nodes -o wide 
+2. Create a nginx deployment	
+	$kubect1 create deployment nginx --image=nginx --replicas=3
+
+
+3. nginx demo app 
+	
+	$kubectl run nginx --image=nginx  --port=80
+	$kubectl get pods -o wide
+
+	for NodePort
+	------------
+	$kubectl expose pod nginx --port=80 --type=NodePort
+	$kubectl get svc
+		from here we can get the NodePort exposed port number (e.g: 80:32223/TCP) 
+	$minikube ip  - it gives the cluster IP 
+		http://cluster-ip:3223	
+
+	$kubectl delete svc nginx
+
+	for LoadBalancer
+	----------------
+	$kubectl expose pod nginx --port=80 --type=LoadBalancer
+	$kubectl get svc
+		here the external IP is not assigned. In order to assign external IP we need to enable the metallb
+	$minikube addons enable metallb
+	$minikube addons configure metallb
+		we need to give range of IP addresses for LoadBalancer.
+		Enter Load Balancer Start IP:
+		Enter Load Balancer End IP:
+
+4. To enable dashboard (we also need to enable metrics-server)
+	https://github.com/kubernetes-sigs/metrics-server
+
+	$minikube addons enable dashboard
+	$minikube addons enable metrics-server
+
+	$minikube dashboard --url  --> it gives the url to access the kubernetes dashboard

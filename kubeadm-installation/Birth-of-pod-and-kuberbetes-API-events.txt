@@ -1,0 +1,53 @@
+Kubectl
+*******
+	kubectl is a command line utility used to communicate with Kubernetes API servers to create, read, update, delete (CRUD) workloads within Kubernetes
+
+
+
+	USER CLI 				kubectl 				kubectl				Kube API Server
+		|				-----------------		-----------------		-----------------
+		|				|				|		|				|		|				|
+		|				|	Client Side	|		|Form the HTTP	|		|	Server Side	|
+		--------------->|	Validation	|------>|	Request		|------>|	Validation	|------>
+		Kubectl run		|				|		|				|		|				|
+		Kubectl apply	-----------------		-----------------		-----------------
+						
+
+		Client Side Validation:
+		-----------------------
+		• Check YAML syntax 	
+		• Misconfiguration
+		• Non-supported resource 
+		• Fail fast mechanism to avoid loading API Server
+
+		Form the HTTP Reuest:
+		---------------------
+		• Forms API calls 
+		• Includes authentication tokens and certificates for user validation 
+		• Reads kubeconfig file 
+		• Submits Pod spec to the API server
+
+		Server Side Validation:
+		-----------------------
+		• Performs user authentication and authorization 
+		• Verifies the API
+
+
+Check the API Call:
+-------------------
+Set verbose level to 7 for all kubectl commands
+	• kubectl get pods -v=7
+
+
+Journey of a Pod creation request
+---------------------------------
+	1. kubectl forms the API request and send it to the API server 
+	2. API server authenticates and authorizes
+	3. API server writes the Pod object to the etcd data store. Once the write is successful, an acknowledgment is sent back to API server and to the client 
+	4. Now the Pod is in Pending state
+	5. Scheduler sees that a new Pod object is created but is not bound to any  node
+	6. Scheduler assigns a node to the pod and updates the API server
+	7. API server updates this to the etcd data store
+	8. Kubelet keeps querying the API server for any new work loads. It sees  that a new Pod is assigned to it
+	9. Kubelet instructs the Container Runtimes like Docker to create the  container and updates the container state back to the API server
+	10. API server updates the pod state as Running to the etcd data store

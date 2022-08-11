@@ -1,0 +1,653 @@
+Pods
+****
+	1. Basic scheduling unit in Kubernetes. Pods are often ephemeral
+	2. Kubernetes doesn't run containers directly; instead it wraps one or more containers into a higher-level structure called a pod
+	3. It is also the smallest deployable unit that can be created, scheduled, and managed on a Kubernetes cluster. Each pod is assigned a unique IP address within the cluster
+	4. Pods can hold multiple containers as well, but you should limit yourself when possible. Because pods are scaled up and down as a unit, all containers in a pod must scale together, regardless of their individual needs. This leads to wasted resources.
+
+	5. A pod can have one or more tightly related containers that will always run together on the same worker node and in the same Linux namespace
+	6. Each pod is like a separate logical machine with its own IP, hostname, processes, and so on, running a single application. it's just a sandbox to run containers in!
+	7. All the containers in a pod will appear to be running on the same logical machine, whereas containers in other pods, even if they're running on the same worker node, will appear to be running on a different one
+
+	8. Any containers in the same pod will share the same storage volumes and network resources and communicate using localhost
+	9. K8s uses YAML to describe the desired state of the containers in a pod. This is also called a Pod Spec. These objects are passed to the kubelet through the API server
+	10. Pods are the unit of replication in Kubernetes. If your application becomes too popular and a single pod instance can't carry the load, Kubernetes can be configured to deploy new replicas of your pod to the cluster as necessary
+
+
+Lifecycle of a Pod
+******************
+	1. Through its lifecycle, a Pod can attain following states starting from Pending to Running 
+	2. A Pod's status can be known from phase field
+		▪ Pending: The pod is accepted by the Kubernetes system but its container(s) is/are not created yet. This includes time a Pod spends waiting to be scheduled as well as the time spent downloading container images over the network.
+		▪ Running: The pod is scheduled on a node and all its containers are created and at-least one container is in Running state
+		▪ Succeeded: All container(s) in the Pod have exited with status 0 and will not be restarted 
+		▪ Failed: All container(s) of the Pod have exited and at least one container has returned a non-zero status
+		▪ CrashLoopBackoff: The container fails to start and is tried again and again
+		▪ Unknown: For some reason the state of the Pod could not be obtained. This phase typically occurs due to an error in communicating with the node where the Pod should be running
+
+		$kubectl get po <pod-name> -o yaml | grep phase
+
+Lifecycle of a Container
+************************
+	• Kubernetes also tracks the state of each container inside a Pod
+	• Once the scheduler assigns a Pod to a Node, the kubelet starts creating containers for that Pod using a container runtime.
+	• You can use kubectl describe pod <name-of-pod> to check the state of a containers
+
+	• There are three possible container states:
+		▪ Waiting: while stilling pulling the container image from a container image registry, or applying Secret 
+		▪ Running: When container is running without any issues
+		▪ Terminated: When container ran to completion or failed for some reason. Use kubectl describe to see the reason, an exit code, and the start and finish time for that container's period of execution
+
+Restart Policy
+**************
+	• Restarting failed containers in the pod
+	• The restartPolicy applies to all containers in the Pod 
+	• The possible values Always, OnFailure, and Never 
+	• The default value is Always
+	• Mention the restartPolicy in PodSpec
+	• When containers in a Pod exit, the kubelet restarts them with an exponential back-off delay (10s, 20s, 40s, ...), that is capped at five minutes 
+	• Once a container has executed for 10 minutes without any problems, the kubelet resets the restart backoff timer for that container
+
+	Condition						ControllerType				Restart Policy
+	---------						--------------				--------------
+	Pods that are expected to       Job							OnFailure or Never
+	terminate(such as batch 
+	computations)
+
+	Pods that are expected to 		Replication Controller    	Always
+	not terminate (such as web
+	servers)
+
+	Pods that needs to run one-per	DaemonSet					Any
+	-machine
+
+
+Restart Policy example:
+----------------------
+apiVersion: vl 
+kind: Pod 
+metadata:
+	name: busybox
+spec:
+	containers:
+	- name: busybox
+	  image: busybox 
+	  command: ["/bin/sh"]
+	  args: ["-c", "sleep 10s; for num in 10 9 8 7 6 5 4 3 2 1; do echo $num ; done'] 
+	restartPolicy: Always
+
+$ kubectl get po
+NAME 		READY 	STATUS 				RESTARTS 		AGE
+busybox		0/1   	CrashLoopBackOff	4 (33s ago)		3m10s
+
+
+Scaling Pods
+************
+	• All containers within the pod get scaled together
+	• You cannot scale individual containers within the pods. The pod is the unit of scale in K8s 
+	• Recommended way is to have only one container per pod. Multi container pods are very rare 
+	• In K8s, initcontainer is sometimes used as a second container inside pod
+
+Multi-Container Pod Design Patterns:
+************************************
+● Init containers: Run to completion, clone source code 
+● Sidecar: Log exporter (Sends log files to a bucket)
+● Ambassador: Proxy pattern (proxies database connection)
+● Adapter: Log format changer etc (Simplifies moonitoring output for service)
+
+
+Imperative vs Declarative commands
+***********************************
+• Kubernetes API defines a lot of objects/resources, such as namespaces, pods, deployments, services, secrets, config maps etc
+• There are two basic ways to deploy these objects in Kubernetes: Imperatively and Declaratively
+
+	Imperatively
+	------------
+	• Involves using any of the verb-based commands like kubectl run, kubectl expose, kubectl delete, kubectl scale and kubectl edit
+	• Suitable for testing and interactive experimentation Made Easy
+
+	Declaratively
+	-------------
+	• Objects are written in YAML files and deployed using kubectl create or kubectl apply 
+	• Best suited for production environments
+
+
+
+Manifest/Spec file
+******************
+1. K8s object configuration files - Written in YAML or JSON 
+2. They describe the desired state of your application in terms of Kubernetes API objects
+3. A file can include one or more API object descriptions (manifests)
+4. Manifest file has 4 mandatory fields as shown below
+
+	✓ apiVersion - version of the Kubernetes API used to create the object
+	✓kind - kind of object being created
+	✓ metadata - data that helps uniquely identify the object, including a name and optional namespace
+	✓ spec - configuration that defines the desired for the object
+
+	All the manifest files are inside/manifests/others in Git Repo https://github.com/kunchalavikram1427/Kubernetes_public
+
+Multiple Resource definitions
+-----------------------------
+	apiVersion: v1
+	kind: Pod
+	metadata:
+		name: ......
+	spec:
+		containers:
+			- name: .....
+	---
+	apiVersion: v1
+	kind: Pod
+	metadata:
+		name: ......
+	spec:
+		containers:
+			- name: .....
+
+
+
+Creating Pods: Declarative Way
+******************************
+• kubect1 create -f pod-definition.yml  #deploy the pod
+• kubectl apply -f pod-definition.yml  #if manifest file is changed/updated after pod deployment and need to re-deploy the manifest again
+• kubectl delete -f pod-definition.yml - delete the pod deployment
+
+		$ cat pod-definition.yml 
+		apiVersion: v1
+		kind: Pod
+		metadata: 
+			name: nginx-pod 
+			labels:
+				app: myapp
+				env: dev
+				project: iot
+				region: asia
+		spec:
+			containers:
+			- name: nginx-container 
+			  image: nginx 
+			  ports:
+			  - containerPort: 80
+
+
+apiVersion: v1.
+kind: Pod
+metadata:
+	annotations: { ... }
+	Labels:
+		env: dev
+spec:
+	containers: 
+	- env:
+		- name: key 
+		  value: value
+		- name: MASTER
+		  value: https://master.example.com:8443 
+	  image: nginx: latest
+	  imagePullPolicy: If Not Present 
+	  name: nginx 
+	  ports:
+	  - containerPort: 5000 
+	    protocol: TCP
+	  resources: {}
+	  securityContext: (...) 
+	  volumeMounts:
+	  - mountPath: /registry
+	    name: registry-storage
+	  - mountPath: /var/run/secrets/kubernetes.to/serviceaccount
+	    name: default-token-br6yz
+	    readOnly: true
+	imagePullSecrets: 
+	- name: default
+	restartPolicy: Always 
+	serviceAccount: default
+
+	volumes:
+	- emptyDir: {} 
+	  name: registry-storage
+
+
+
+Creating Pods: Declarative Way
+******************************
+• We can directly generate the Manifest file from the imperative commands by using dry run and printing the output in yaml format
+• Edit the YAML file as required and deploy it using kubectl create or apply
+kubectl run nginx-pod --image=nginx --port=80 --dry-run=client -o yaml> pod-manifest.yml (or) 
+kubectl run nginx-pod --image=nginx --port=80 --dry-run=client -o yaml | tee pod-manifest.yml
+
+
+Copying files to and from containers
+************************************
+• Sometimes we may want to add a file to a running container or retrieve a file from it during development phases
+• Kubectl offers the cp command to copy files or directories from your local computer to a container of any pod or from the container to your computer
+
+	From pod to local:
+	kubect1 cp nginx:/usr/share/nginx/html/index.html ./index.html
+	
+	From local to pod
+	kubect1 cp index.html nginx:/usr/share/nginx/html/index.html
+
+
+• Declarative file with stdin and --tty flags 
+	-i, which makes sure STDIN is kept open. You need this for entering commands into the shell 
+	-t, which allocates a pseudo terminal (TTY)
+• This is required for some images with bash or sh as the default CMD
+
+	$kubectl run os --image=ubuntu -it
+
+	apiVersion: v1
+	kind: Pod
+	metadata:
+		name: os
+	spec:
+	 containers:
+	  - name: c1 
+        image: ubuntu 
+	    stdin: true
+		tty: true
+
+
+Pods
+****
+--> Get Pods
+	kubectl get all Get all resources in current namespace 
+	kubectl get po # Get list of pods in current namespace 
+	kubectl get po --help
+	kubectl get po -o wide
+	kubectl get pods --show-labels
+	kubectl get pods -1 key=value
+	kubectl get pods -w #output refreshes once in 2 sec 
+	kubectl get namespaces
+	kubectl get pods -n <namespace-name>
+	kubectl get pods--all-namespaces (or) kubectl get pods -A
+
+--> Run Pods
+	kubectl run --help
+	kubectl run nginx --image nginx --dry-run=client
+	kubectl run nginx --image nginx --dry-run=client -o yaml
+	kubectl run nginx --image nginx --dry-run=client -o yaml> pod.yml
+	kubectl run nginx --image-nginx
+	kubectl run nginx --image-nginx --port 80 # Also exposes port 80 of container
+
+
+kubernetes debugging commands (logs, describe, events)
+--> logs
+	kubectl logs -f <pod-name> # Do kubectl logs --help
+	kubectl logs -p <pod-nmae> # pint the logs of a pod which is not running
+
+--> describe
+	kubect describe --help
+	kubectl describe po <pod-name> # Get extended information & check the state of a containers 
+
+	kubectl get po <pod-name> -o yaml det pod manifest in YAML format
+	kubectl get po <pod-name> -o yanl | grep phase # Get Pod's status
+
+--> events
+	kubectl get events # shows events of cluster
+	kubectl get events -n dev # show events of dev namespace
+
+--> run & service
+	kubectl run test --image nginx --port 88 --expose --dry-run=client# Also create a service of type Cluster IP
+
+	kubectl expose pod nginx --name nodeportsvc --port 88 --target-port 80 --type=NodePort # Also create a service of type NodePort 
+	kubectl run git --image=alpine/git --command --git version
+
+
+--> Interactive pod (Run commands inside a container)
+	kubect1 run -i -t busybox --image-busybox --restart=Never # start a busybox pod and keep it in the foreground, don't restart it if it exits
+	kubect1 run ubuntu --image=kunchalavikram/ubuntu_with_ping 
+	kubectl run ubuntu -i -t --rm --image=kunchalavikram/ubuntu_with_ping  # Deletes pod as soon as you exit from interactive mode
+
+	kubectl run curl --image-curlimages/curl -i --rm --restart=Never -- Pintenv 
+	kubectl run curl --image-curlimages/curl -i --rm --restart=Never -- cat /etc/hosts
+
+--> Delete Pods
+	kubectl delete pod <pod-name> # Delete a pod
+	kubectl delete pod <pod-name> --force--grace-period=0 --> delete Pod immediately. 
+	kubectl delete pod <pod-name> --wait-false
+	kubectl delete po --all # Delete all pods from current namespace
+
+--> Edit Pod
+	kubectl edit pod <pod-name>
+
+--> Create a pod with limits
+	kubectl run <pod-name> --image=<image> --env="<key>=<value>" --labels="<key>=<value>" --requests='cpu=100m,memory=256Mi' --limits='cpu-200m, memory=512Mi'
+
+--> Create pod from manifest
+	kubectl create -f <filename|url> : # Create an object from a specified file
+	kubectl replace -f <filename|url>: # Update a live object from a specified file 
+	kubectl delete -f <filename|url>: # Delete an object from a specified file
+	kubectl get -f <filename |url> -o yaml: # View info about an object from a specified file 
+	kubectl apply -f <filename |url> : # Creating/Updating an object from a specified file
+	kubectl apply -f <directory> : # Creating/Updating all objects specified in the directory
+
+	kubect1 create -f pod-definition.yml
+	kubectl apply -f pod-definition.yml - if manifest file is changed/updated after deployment and need to re-deploy the pod again
+
+	kubectl delete -f pod-definition.yml --force --grace-period=8
+
+--> logs
+	kubectl logs my-pod		# dump pod logs (stdout)
+	kubectl logs -l name=myLabel 	# dump pod logs, with label name=myLabel (stdout)
+	kubectl logs my-pod -c my-container 	# dump pod container logs (stdout, multi-container case)
+	kubectl logs -l name=myLabel -c my-container 	#dump pod logs, with label name=myLabel (stdout)
+	kubectl logs -f my-pod 	# stream pod logs (stdout)
+	kubectl logs -f my-pod -c my-container 	# stream pod container logs (stdout, multi-container case)
+	kubectl logs -f -l name=myLabel --all-containers 	# stream all pods logs with label name=myLabel (stdout)
+
+--> exec
+	kubect exec nginx -- printenv 
+	kubect exec nginx -- ps aux 
+	kubect exec nginx -- curl localhost
+	kubect exec --stdin --tty nginx-pod -- /bin/sh
+	kubect exec -it nginx-pod -- /bin/sh 
+	kubect exec redis --  ls /
+
+--> Attach to a container
+	kubectl attach redis -i
+	kubectl attach $pod-name -c $pod-container -i -t
+
+--> Temp pod
+	kubect] run test-pod --image=alpine --rm -it 
+	kubectl run my-shell --rm -it --image ubuntu -- bash 
+	kubectl run tmp-shell --rm -i --tty --image centos -- /bin/bash
+
+	kubectl run nginx --image=nginx --port=80
+	kubectl run nginx --image=nginx --port=80 --expose -n test
+	kubectl run curl --image=curlimages/curl -i --rm --restart=Never -- curl 172.16.0.2  #Here we are culing the ip address of the nginx pod which we created before
+	kubectl run curl --image=curlimages/curl -i --rm --restart=Never -- curl -s 172.16.0.2 
+	kubectl run curl --image=curlimages/curl -i --rm --restart=Never -- curl nginx:latest
+
+Run a temp pod
+**************
+	• You can also fire up an interactive Pod within a Kubernetes cluster that is deleted once you exit the interactive session
+	• --rm ensures that the pod is deleted when you exit the interactive shell
+	• -i/--tty: The combination of these two are what allows us to attach to an interactive session
+	• --: Delimits the end of the kubectl run options from the positional arg (bash)
+	• bash: Overrides the container's CMD. In this case, we want to launch bash as our container's command
+		
+		kubect1 run test-pod --image=alpine --rm -it
+		kubect1 run my-shell --rm -it --image ubuntu -- bash
+		kubectl run tmp-shell --rm -i --tty --image centos -- /bin/bash
+
+
+
+--> Copying files to containers
+	From pod to local: kubectl cp nginx:/html/index.html /tmp/index.html 
+	From local to pod: kubect1 cp /tmp/index.html nginx:html/
+
+-->Patch
+	Kubernetes offers various methods to update resources: edit, apply, patch, and replace. 
+	https://linuxhint.com/kubectl-patch-command/
+ 
+
+
+Interacting with running Pods
+*****************************
+• kubectl logs my-pod 									# dump pod logs (stdout)
+• kubectl logs -l name=myLabel 							# dump pod logs, with label name=myLabel (stdout) 
+• kubectl logs my-pod -c my-container 					# dump pod container logs (stdout, multi-container case)
+• kubectl logs -l name=myLabel -c my-container 			# dump pod logs, with label name=myLabel (stdout)
+• kubectl logs -f my-pod 								# stream pod logs (stdout)
+• kubectl logs -f my-pod -c my-container 				# stream pod container logs (stdout, multi-container case)
+• kubectl logs -f -l name=myLabel --all-containers 		# stream all pods logs with label name=myLabel (stdout)
+• kubectl run -i --tty busybox --image=busybox -- sh  	# Run pod as interactive shell
+• kubectl run nginx --image=nginx -n mynamespace  		# Run pod nginx in a specific namespace
+• kubectl attach my-pod -i								# Attach to Running Container
+• kubectl exec my-pod -- ls / 							# Run command in existing pod (1 container case)
+• kubectl exec --stdin --tty my-pod -- /bin/sh 			# Interactive shell access to a running pod (1 container case)
+• kubectl exec my-pod -c my-container -- ls/ 			# Run command in existing pod (multi-container case)
+
+
+ 
+ 
+Image Pull Policy
+*****************
+	1. Determines if the container image should be pulled from the repository prior to starting the container
+	2. If the tag is latest, k8s defaults imagePullPolicy to Always
+	3. Otherwise, defaults imagePullPolicy to If Not Present.
+
+	value 					Description
+	-----					-----------
+	Always					Always pull the image
+	IfNotPresent			Only pull the image  if it does not already exist on the ode
+	Never					Never pull the image
+
+example
+-------
+apiVersion: v1
+kind: Pod
+metadata:
+	name: app
+spec:
+	containers:
+	- name: c1
+	  image: nginx
+	  imagePullPolicy: Always
+
+
+ImagePullBackOff
+*****************
+	1. When a kubelet starts creating containers for a Pod using a container runtime, it might be possible the container is in Waiting state because of ImagePullBackOff
+	2. ImagePullBackOff occurs when Kubernetes could not pull a container image due to invalid image name or not having the credentials to pull from a private registry
+	3. Kubernetes will keep trying to pull the image, with an increasing back-off delay 5 minutes
+	4. To avoid this, we need to specify imagePullSecrets on a Pod
+
+example	
+--------
+apiVersion: v1
+kind: Pod
+metadata:
+	name: app
+spec:
+	containers:
+	- name: c1
+	  image: myregistry.com/image-name:tag
+	  imagePullPolicy: Always
+	imagePullSecrets:
+	- name: myregistry.com-registry-credentials
+
+
+apiVersion: v1
+kind: Pod
+metadata:
+	name: app
+spec:
+	containers:
+	- name: c1
+	  image: kishore4122/nginx:1.0
+	  imagePullPolicy: Always
+	imagePullSecrets:
+	- name: myregistry.com-registry-credentials
+
+
+
+
+Pause Containers
+****************
+	1. The pause container is a container which holds the network namespace for the pod
+	2. Kubernetes creates pause containers to acquire the respective pod's IP address and set up the network namespace for all other containers that join that pod
+
+	$docker ps 
+	CONTAINERID		IMAGE 	COMMAND 				CREATED 	STATUS 
+	37khsd87328		nginx 	"/docker-entrypoint.."	2 sec ago
+	ca7892398jh		k8s.gcr "/pause"				5 sec ago
+
+	https://kubernetes.io/docs/concepts/workloads/init-containers/
+
+
+	3. If the pause container is dead, Kubernetes consider the pod as dead, kill it and reschedule a new one
+	4. It is like a secret container that runs on every pod to keep the namespace open in case all the other containers on the pod die
+
+
+Commands & Args
+***************
+	kubectl run ubuntu --image=ubuntu --dry-run=client -o yaml -- cat  # here we passed just arguments
+	kubectl run ubuntu --image=ubuntu --dry-run=client -o yaml --command ping -- 8.8.8.8  # here we passed both command and arguments
+
+
+example1:
+---------
+apiVersion: v1
+kind: Pod
+metadata:
+	name: command-demo
+	label:
+		purpose: demonstrate-commands-arguments
+spec:
+	containers:
+	- name:  command-demo-container
+	  image: debian
+	  command: ["printenv"]
+	  args: ["HOSTNAME", "KUBERNETS_PORT"]
+	restartPolicy: Never
+
+
+example2
+--------
+apiVersion: v1
+kind: Pod
+metadata:
+	name: command-demo
+	label:
+		purpose: demonstrate-commands-arguments
+spec:
+	containers:
+	- name:  command-demo-container
+	  image: debian
+	  command: ["git", "clone"]
+	  args: ["URL"]
+	restartPolicy: Never
+
+
+example3
+--------
+apiVersion: v1
+kind: Pod
+metadata:
+	name: command-demo
+	label:
+		purpose: demonstrate-commands-arguments
+spec:
+	containers:
+	- name:  command-demo-container
+	  image: debian
+	  command: 
+	  - printenv
+	  args:
+	  - HOSTNAME
+	  - KUBERNETES_PORT
+	restartPolicy: Never
+
+
+example4
+--------
+apiVersion: v1
+kind: Pod
+metadata:
+	name: pod1
+	label:
+		run: pod1
+		my-label: test
+spec:
+	containers:
+	- name:  c1
+	  image: bash
+	  args:
+	  - bash
+	  - c
+	  - hostname >> /tmp/hostname && sleep 5
+	restartPolicy: Always
+
+example5
+--------
+apiVersion: v1
+kind: Pod
+metadata:
+	name: pod1
+	label:
+		env: test
+spec:
+	containers:
+	- name:  dummy
+	  image: ubuntu
+	  args: [/bin/bash, -c, 'i=0; while true; do echi "$i: $(date)"; i=$((i+1)); done']
+	restartPolicy: Always
+
+example6
+--------
+apiVersion: v1
+kind: Pod
+metadata:
+	name: pod1
+	label:
+		env: test
+spec:
+	containers:
+	- name:  dummy
+	  image: ubuntu
+	  command: ["/bin/bash"]
+	  args: ["-c", 'i=0; while true; do echi "$i: $(date)"; i=$((i+1)); done']
+	restartPolicy: Always
+
+
+
+
+Ephemeral Containers  kubectl debug -it ephemeral-container_name
+********************
+	• Introduced with Kubernetes 1.16 as an alpha feature but now it is in beta 
+	• Ephemeral container is an additional container to an exiting pod for debugging purposes. 
+	• Debugging tools can include sh, bash & curl which distroless and minimal base images lack
+	• In order to add an ephemeral container to an existing pod, use the pod's ephemeralcontainers subresource
+	• This field is alpha-level and is only honored by servers that enable the EphemeralContainers feature.
+	• You can also debug a pod in CrashLoopBackOff state.
+	• Ephemeral containers have no resource or scheduling guarantees, and they will not be restarted when they exit or when a pod is removed or restarted
+	• If an ephemeral container causes a pod to exceed its resource allocation, the pod may be evicted.
+	• Ephemeral containers may not be added by directly updating the pod spec. They must be added via the pod's ephemeralcontainers subresource, and they will appear in the pod spec once added
+
+	$kubectl explain pod.spec.ephemeralContainers
+
+	https://kubernetes.io/concepts/workloads/pods/ephemeral-containers/
+
+
+				Kubectl debug -it
+					 |
+	|----------------|----------------------------------------------------
+	|	-------------------------								POD 	|
+	|	|	Ephemeral Contianer	| With debugging utilities				|
+	|	|						| like bash, sh & curl					|
+	|	-------------------------										|
+	|				|													|
+	|				|													|
+	|				|Debug with shared process space					|
+	|				|													|
+	|				|													|
+	|				|													|
+	|	-------------------------										|
+	|	|	Application 		| Without debugging						|
+	|	|	Container 			| Utilities like bsh, sh & curl 		|
+	|	|	(Distroless)		|										|
+	|	-------------------------										|
+	|-------------------------------------------------------------------|
+
+
+Ephemeral Containers in Minikube
+*********************************
+	minikube start --feature-gates-EphemeralContainers=true
+	
+	https://minikube.sigs.k8s.io/docs/handbook/config/#enabling-feature-gates
+
+
+example:
+--------
+
+	kubectl run nginx --image nginx:distroless --restart=Never
+
+	kubectl debug -it nginx(pod_name) --image=busybox:1.28 --target=nginx(pod_name)
+
+Debugging using a copy of the pod
+---------------------------------
+	kubectl run myapp --image=busybox:1.28 --restart=Never -- sleep 1d
+
+	kubectl debug myapp -it --image=ubuntu --share-processes --copy-to=myapp-debug

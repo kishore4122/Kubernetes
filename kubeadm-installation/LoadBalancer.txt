@@ -1,0 +1,131 @@
+LoadBalancer
+************
+	• A LoadBalancer service is the standard way to expose a Kubernetes service to the internet 
+	• On a cloud platform like AWS, GCP and Azure, this will spin up a Cloud Load Balancer that will give you a single IP address that will forward all external traffic to your service
+	• Traffic arriving at this load balancer on the port you specify, will be forwarded to the backend pods
+	• Cloud providers automatically assigns a public IP address to the LoadBalancer. You can provide a IP address in the service manifest file. If the provider supports it, it will be implemented 
+	• There is no filtering, no routing, etc. This means you can send almost any kind of traffic to it, like HTTP, TCP, UDP or WebSocket's
+
+
+	Few limitations with LoadBalancer:
+	----------------------------------
+	• Every service exposed will gets it's own IP address
+	• It gets very expensive to have external IP for each of the service(application) in the cluster. 
+	• As applications increases, the overall cost for using cloud provider's resources increase
+
+
+
+	• On Google Cloud, AWS, or Azure, a service type of LoadBalancer in the service manifest file will immediately run an Elastic / Cloud Load Balancer that assigns externally IP (public IP) to your application 
+	• But for on-prem or bare-metal k8s clusters, this functionality is not available
+	• Using service type as LoadBalancer on bare-metal will not assign any external IP and service resource will remain in Pending state forever.
+
+
+	spec:
+	  type: LoadBalancer 
+	  selector: 
+		app: hello
+	  ports: 
+	  - port: 80 
+        targetPort: 8080 
+        protocol: TCP
+
+
+Example 1:
+----------
+		$ cat flask-loadbalancer.yml
+		apiVersion: apps/v1 
+		kind: Deployment 
+		metadata:
+		  name: flask-deployment
+		  labels: 
+		    app: flask
+		spec: 
+		  replicas: 3 
+		  selector: 
+		    matchLabels:
+		      app: flask
+		template:
+		  metadata: 
+			labels: 
+			  app: flask
+		  spec:
+		    containers:
+			- name: flask-container
+			  image: kunchalavikram/hello-flask:v1 
+			  ports:
+			  - containerPort: 5000
+		---
+		apiVersion: v1
+		kind: Service
+		metadata:
+		  name: lb-flask
+		spec:
+		  type: LoadBalancer
+		  ports:
+		  - name: http
+		    port: 80
+		    targetPort: 5000 
+		    nodePort: 32000
+		    protocol: TCP
+		  selector: 
+		    app: flask
+		
+
+
+   • Deploy the pods and LoadBalancer service
+		
+		kubectl apply -f flask-loadbalancer.yml 
+	
+	Get pods and services
+		
+		kubectl get po,svc -o wide
+
+	Note: External IP is in pending state as we are running the manifests in on-prem cluster
+
+example 2
+---------
+	apiVersion: v1
+		kind: Service
+		metadata:
+		  name: connectedcity-service
+		spec:
+		  type: LoadBalancer
+		  ports:
+		  - name: http
+		    port: 80
+		    targetPort: 5000 
+		    nodePort: 32000
+		    protocol: TCP
+		  selector: 
+		    app: connectedcity
+	---
+	apiVersion: apps/v1 
+		kind: Deployment 
+		metadata:
+		  name: connectedcity-deployment
+		spec: 
+		  replicas: 3 
+		  selector: 
+		    matchLabels:
+		      app: connectedcity
+		template:
+		  metadata: 
+			labels: 
+			  app: connectedcity
+		  spec:
+		    containers:
+			- name: connectedcity-container
+			  image: kunchalavikram/connectedcity:v1 
+			  ports:
+			  - containerPort: 5000
+
+
+	Install MetalLB on on-prem k8s cluster: https://metallb.universe.tf/installation/
+
+LadBalancer: Cons
+-----------------
+	• Every service exposed via LoadBalancer will gets it's own IP address
+	• It gets very expensive to have external IP for each of the service
+	• LoadBalancer pricing depends on the cloud providers
+	• With increase in our applications, the overall cloud usage bill for owning a dedicated IP for each application would increase
+	• All these are addressed by Ingress services in Kubernetes

@@ -1,0 +1,199 @@
+The Desired State
+*****************
+	• Desired state is one of the core concepts of Kubernetes
+	• Through a declarative or an imperative API, we describe the state of the objects like Pod, ReplicatSet, Deployment etc., in the cluster
+	• If, due to some failures, a container stops running, the Kubelet recreates the Pod based on the lines of the desired state stored in etcd
+	• Kube controller managers in the master are responsible for regulating the state of the system. It they detect any drift in the current state of the cluster, they instruct the kubelets component in the workers to spin up additional pods (depending on desired object) to bring the cluster back to desired state 
+	• So, Kubernetes strictly ensures that all the containers running across the cluster are always in the desired state
+
+Need for replication in Kubernetes
+**********************************
+	There are several reason why we need to replicate the containers/applications
+
+	Reliability:
+		By having multiple pods for an application, we can prevent problems like application downtimes if one or more containers fails. This is particularly true if the system replaces any containers that fail due to issues with node or the application
+
+	Load balancing
+		Having multiple container enables us to easily send traffic to different instances to prevent overloading a single instance or node(pods spread across the cluster). This is something that Kubernetes does out of the box, making it extremely convenient
+	
+	Scaling
+		When load does become too much for the number of existing instances, Kubernetes enables us to easily scale up the application, adding additional instances as and when needed
+
+Replication Controller (https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller/)
+**********************
+	• The Replication Controller is the original form of replication in Kubernetes
+	• Sometimes, a single instance of the application may not be sufficient to handle the growing user traffic to the application
+	• Also, if this only instance goes down because of a failure, K8s will not bring this pod up again automatically unless it is managed by a controller
+	• In order to prevent this, we would like to have more than one instance or POD running at all times inside the cluster
+	• Kubernetes supports different controllers (Replicacontroller & ReplicaSet) to handle multiple instances of a pod. 
+		Ex: 3 replicas of nginx webserver
+	• Replication Controller ensures high availability by replacing the unhealthy/dead pods with a new one to ensure required replicas are always running inside a cluster
+	• Does this mean you can't use a replication controller if you plan to have a single POD? No! Even if you have a single POD, the replication controller can help by automatically bringing up a new POD when the existing one fails
+	• Another reason we need replication controller is to create multiple PODs to share the load across them 
+	• Replication controller uses equality-based selectors while ReplicaSets uses set-based selectors 
+	• Replica controller is deprecated and replaced by Replica Sets
+
+Scaling Replication Controller
+------------------------------
+	• To scale up the replicas:
+		kubectl scale rc <name_of_rc> --replicas=5
+
+	• To delete the Replication Controller:
+		kubectl delete rc <name_of_rc>
+		kubectl delete -f <name_of_rc>.yml
+
+example: replicationcontroller.yml
+-----------------------------------
+apiVersion: v1
+kind: ReplicationController
+metadata: 
+  name: nginx-replicationcontroller
+  labels:
+    app: webapp
+    type: frontend
+spec:
+  replicas: 3
+  selector:
+    app: nginx
+  template:
+    metadata:
+      name: nginx-pod
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx-container
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+
+
+   kubectl apply -f replicationcontroller.yml
+
+   kubectl get pods -o wide
+   kubectl get rc -o wide
+   kubectl get rc nginx-rc -o wide
+   kubectl describe rc nginx-rc
+
+   kubectl delete -f replicationcontroller.yml
+   kubectl delete rc nginx-rc
+
+
+   kubectl scale rc nginx-rc --replicas=5
+   kubectl scale rc nginx-rc --replicas=0
+   kubectl get rc 
+
+ReplicaSets (https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/)
+***********
+	• ReplicaSets are a higher-level API that gives the ability to easily run multiple instances of a given pod 
+	• ReplicaSets ensures that the exact number of pods(replicas) are always running in the cluster by replacing any failed pods with new ones
+	• The replica count is controlled by the replicas field in the resource definition file
+	• ReplicaSets uses set-based selectors to manage the pods
+	• The major difference between a replication controller and replica set is that the rolling-update command works with Replication Controllers, but won't work with a Replica Set. This is because Replica Sets are meant to be used as the backend for Deployments (to be covered next)
+	• Deployments are recommended over ReplicaSets
+
+	• ReplicaSets ensures that the exact number of replicas/pods mentioned by replicas tag are always running in the cluster 
+	• It uses the pod labels as the selector to manage them
+	• If any pod is deleted, it recreates it automatically and ensures that desired state is always maintained
+
+example: replicaset.yml
+-----------------------------------
+apiVersion: v1
+kind: ReplicaSet
+metadata: 
+  name: nginx-replicaset
+  labels:
+    name: webapp
+    type: frontend
+spec:
+  replicas: 3
+  selector:
+  	matchLables:
+      app: nginx
+  template:
+    metadata:
+      name: nginx-pod
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx-container
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+
+
+
+   kubectl get rs
+   kubectl get rs -o wide
+   kubectl get all # it shows all objects in the current namespace
+   kubectl describe rs nginx-replicaset
+   
+   kubectl scale rs nginx-replicaset --replicas=5
+   kubectl scale -f replicaset.yml --replicas=5
+
+   kubectl delete -f replicaset.yml
+   kubectl delete rs nginx-replicaset
+
+Resources that support set-based requirements
+---------------------------------------------
+Newer resources, such as Job, Deployment, ReplicaSet, and DaemonSet, support set-based requirements.
+
+	selector: 
+	  matchLabels:
+		component: redis 
+	  matchExpressions:
+		- {key: tier, operator: In, values: [cache]}
+		- {key: environment, operator: Notin, values: [dev]}
+
+	• matchLabels is a map of {key,value} pairs
+	• A single {key.value} in the matchLabels map is equivalent to an element of match Expressions, whose key field is "key", the operator is "In", and the values array contains only "value"
+	• matchExpressions is a list of pod selector requirements. Valid operators include In, Notin, Exists, and DoesNotExist
+	• The values set must be non-empty in the case of In and NotIn. For Exists and DoesNotExists, values feild may be ignored
+	• All of the requirements, from both matchLabels and matchExpressions are ANDed together -- they must all be satisfied in order to match
+
+
+Consider a Pod with only label app: webapp
+-------------------------------------------
+✓ ReplicaSet will fail to deploy as pod should have both the labels selected through matchLabels. Each label is AND operated.
+
+	selector: 
+	  matchLabels: 
+		app: webapp 
+		tier: front-end
+
+✓ Replica Set will be deployed as values are OR operated. Any matching label should work
+
+	selector:
+	  matchExpressions:
+		- {key: app, operator: In, values: [webapp, nginx]}
+
+✓ Replica Set will fail as both expressions are AND operated and pod has no label called tier
+
+	selector:
+	  match Expressions:
+		- {key: app, operator: In, values: [webapp, nginx]} 
+		- {key: tier, operator: Exists}
+
+✓ This works as pod has no label called tier and selector doesn't require that label
+
+	selector:
+	  match Expressions:
+		- {key: app, operator: In, values: [webapp, nginx]} 
+		- {key: tier, operator: DoesNotExist}
+
+
+• kubectl edit replicaset <replicaset-name> - edit a replicaset; like image, replicas
+• kubectl delete -f replica-set.yml
+• kubectl get all - get pods, replicasets, deployments, services all in one shot
+• kubect1 replace -f replicaset-01.yml - replaces the replicaset with updated definition file
+
+NOTE:Can we remove the pod from a ReplicaSets?
+	• Yes, we can. It is as simple as removing the label from the pod and it will be removed from the Set.
+
+	kubectl label pod pod_name key=value --overwrite
+	kubectl label po nginx-rs-saklfj app=nginx --overwrite
+
+
+Note: All Manifest files are inside /manifest/others in Git repo
+		github.com/kunchalavikram1427/Kubernetes_public

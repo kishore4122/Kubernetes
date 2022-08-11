@@ -1,0 +1,143 @@
+Port-forward
+************
+	• Often times you want to be able to temporarily communicate with applications in your cluster without exposing them to the public internet for security reasons
+	• To achieve this, the port-forward command allows you to securely forward a port on your local machine through the kubernetes API server to a Pod running in your cluster
+	• You can use this method to investigate issues and adjust your services locally without the need to expose them beforehand
+	• kubectl port-forward gives you direct network access to a port of a pod, for test purposes. It establishes a tunnel from the target pod to your localhost. The command requires you to define the type or name of the resource as well as local and remote port numbers
+
+
+	Syntax:
+	-------
+	kubectl port-forward --address <local-ip> <resource-name> <local-port>:<resource-port> -n <name-space>
+	
+	NOTE:Absence of address field defaults to localhost and namespace to default
+
+
+	• Run a nginx pod at port 80 and check the node where it is running 
+
+		kubectl run nginx-pod --image=nginx --port=80
+	• Port forward the traffic from local port 8080 to remote port of the container which is 80 
+
+		kubect1 port-forward nginx-pod 8080:80
+
+	• Open another terminal and run below command to query the localhost. Here i'm running the command in master node 
+
+		curl 127.0.0.1:8080
+
+	• We can also specify a local IP address for Port Forwarding
+	• In the below case, port forward the traffic on specified IP and Port to remote pod running on port 80. The IP address in the example is the IP of master node
+
+		kubect1 port-forward --address localhost,192.168.0.112 nginx-pod 9090:80
+
+	Open the browser and point to the IP and Port used for port forwarding
+
+
+NodePort
+********
+	• Cluster IP service limits access to pods within the cluster
+	• If you want to expose the application outside the cluster to enable external connectivity, use NodePort service 
+	• NodePort opens a specific port on all the Nodes in the cluster and forwards any traffic that is received on this port to internal services
+	• NodePort is build on top of ClusterlP service by exposing the ClusterIP service outside of the cluster
+	• NodePort must be within the port range 30000-32767 
+	• If you don't specify this port, a random port will be assigned. It is recommended to let k8s auto assign this port
+	• NodePort service type is going to use the IP address of any node in the cluster combined with a NodePort to route traffic to those pods
+
+	• Similar to Cluster IP service,NodePort uses labels and selectors to manage the pods
+	• Application can be accessed on any node IP in the cluster on the specified .spec.ports.nodePort
+
+
+Limitations
+***********
+	• In NodePort service, users can access application using the URL http://<node-ip>:<node-port>
+	• In Production environment, we do not want the users to have to type in the IP address every time to access the application
+	• So, we configure a DNS server to point to the IP of the nodes. Users can now access the application using the URL http://xyz.com:30001
+	• Now, we don't want the user to have to remember port number either
+	• However, NodePort service can only allocate high numbered ports which are greater than 30,000
+	• So, we deploy a Proxy server between the DNS server and the cluster that proxies requests on port 80 to port 30001 on the nodes
+	• We then point the DNS to proxy server's IP, and users can now access the application by simply visiting http://xyz.com
+
+
+	NodePort Service YAML
+	---------------------
+	apiVersion: v1
+	kind: Service
+	metadata:
+	  name: nginx
+	spec:
+	  type: NodePort
+	  selector:            #here the selector for pods it will take it as run: nginx
+	    run: nginx 			if incase it is deployment then it is app: nginx
+	  ports:
+	  - port: 80
+	    targetPort: 80
+	    nodePort: 30080(optional)
+
+
+Example:
+--------
+		$ cat flask-nodeport.yml
+		
+		apiVersion: apps/v1 
+		kind: Deployment 
+		metadata:
+		  name: flask-deployment
+		  labels: 
+		    app: flask
+		spec: 
+		  replicas: 3 
+		  selector:
+		    matchLabels: 
+		      app: flask
+		  template:
+		    metadata:
+		      labels:
+		        app: flask
+		    spec:
+		      containers:
+		      - name: flask-container
+				image: kunchalavikram/hello-flask:v1
+				ports: 
+				- containerPort: 5000
+		---
+		apiVersion: v1
+		kind: Service
+		metadata:
+		  name: nodeport-flask
+		spec:
+		  type: NodePort
+		  ports:
+		  - name: http 
+		    port: 80
+		    targetPort: 5000 
+			nodePort: 32000
+			protocol: TCP
+		  selector:
+			app: flask
+		
+
+
+	• Deploy the pods and NodePort service
+		
+		kubect1 apply -f flask-nodeport.yml 
+	
+	• Get pods and services
+
+		kubectl get po,svc -o wide
+
+	• Describe service
+		
+		kubectl describe svc nodeport-flask
+
+	• Get nodes information 
+		
+		kubectl get nodes -o wide
+
+	Access the application on any of the node IPs and set nodePort
+
+
+
+Example 2:
+----------
+	kubectl run po nginx --image=nginx --port=80
+
+	kubectl expose po nginx --port=80 --target-port=80 --type=NodePort

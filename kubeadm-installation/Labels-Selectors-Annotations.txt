@@ -1,0 +1,322 @@
+Labels and Selectors:
+*********************
+	1. Even a small Kubernetes cluster may have hundreds of Containers, Pods, Services and many other Kubernetes objects in it
+	2. It quickly becomes annoying to page through pages of kubectl output to find the required object 
+	3. Labels and selectors address this issue in k8s
+
+
+Labels
+******
+	• Labels are key/value pairs that are attached to objects, such as pods
+	• Labels allows to logically group certain objects by giving various names to them
+	• You can label pods, services, deployments and even nodes 
+
+	Ex:
+		"release" : "stable",  "release" : "canary"
+		"environment" : "dev", "environment" : "prduction"
+		"tier" : "frontend",  "tier" : "backend"
+
+	https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+
+	example: cat Pod.yml
+	--------------------
+	apiVersion: v1
+	kind: Pod
+	metadata:
+	  name: label-demo
+	  labels:
+	    application-ID: my-app
+	    version: versior-nr
+	    stage: dev
+	    release: release-nr
+	    owner: team-kube
+	spec:
+	  containers:
+	  - name: nginx
+	    image: nginx:1.4.2
+	    ports:
+	    - containerPort:80
+
+
+Note: All Manifest files are inside /manifest/others in Git repo
+		github.com/kunchalavikram1427/Kubernetes_public
+
+• Labels can be attached to any k8s objects to logically group them, like, grouping pods of an application, grouping them based on a logic they implement etc
+
+• If labels are not mentioned while deploying k8s objects using imperative commands, the label is auto set as "run: <object-name>"
+	
+	kubectl run nginx-pod --image=nginx
+	kubectl get pods --show-labels
+	NAME 		READY		STATUS		RESTART		AGE 	LABELS
+	nginx-pod	1/1 		Running		0 			45 sec  run=nginx-pod
+
+• Adding labels to running pods
+	
+	kubectl label pod nginx-pod environment=dev app=nginx   #it add 2 labels to the running pod
+
+• Adding labels while creating the pod
+	
+	kubectl run nginx-pod --image=nginx -l env=dev,tier=frontend
+	kubectl run nginx-pod --image=nginx -l "env=dev,tier=frontend"
+	kubectl run nginx-pod --image=nginx --label="env=dev,tier=frontend"
+	
+	
+
+	kubectl get po --show-labels  # to get labels of all pods
+	kubectl get po nginx --show-labels  # to get labels of a pod with nginx name
+	kubectl label po nginx-pod env=test --overwrite  # to replace env form dev to test
+
+• Deleta a label assigned to a pod
+	
+	kubectl label pod nginx  -l env-  
+
+
+
+kubectl label node <node-name> key=value 
+kubectl run nginx-1 --image=nginx -l env=dev, tier=front-end 
+kubectl run nginx-2 --image=nginx -l env=dev, tier=back-end 
+kubectl label pod <pod-name> key=value 
+kubectl get nodes --show-labels 
+kubectl get pods --show-labels 
+Kubectl get pods -l key=value 
+
+kubectl run alpaca-prod \ 
+--image=gcr.io/kuar-demo/kuard-amd64:blue \
+--replicas=2 \
+--labels="ver=1,app=alpaca,env=prod"
+
+kubectl label deployments alpaca-test "canary=true"
+
+kubectl get pods --selector "ver=2"
+kubectl get pods -l "ver=2"
+
+If we specify two selectors separated by a comma, only the objects that satisfy both will be returned. This is a logical AND operation:
+	$kubectl get pods --selector "app=bandicoot,ver=2"
+	$kubectl get pods -l "app=bandicoot,ver=2"
+
+
+
+Annotations:
+*************
+	1. Kubernetes labels and annotations are ways of adding metadata to Kubernetes object, but the similarities end here
+	2. Kubernetes labels allow you to identify, select and operate on Kubernetes objects, whereas annotations are non-identifying metadata i.e., stuff not used internally by k8s. You can't specify selectors over them within Kubernetes, but they can be used by external tools and libraries
+	3. The metadata to Kubernetes objects can include phone numbers of persons responsible for the object, tool information for debugging purposes, pointers to logging/monitoring, rollout data, git info etc.,
+	4. In short, annotations can hold any kind of information that is useful and can provide context to DevOps teams
+
+	kubect1 annotate pod nginx-1 scrape=true
+
+	https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+
+Note: Annotations are for that where external tools and libraries that wants to integrate with Kubernetes.
+
+example:
+-------
+$ cat pod.yml 
+apiVersion: v1 
+kind: Pod
+metadata: 
+  name: label-demo
+  annotations:
+    gitbranch: master 
+    prometheus.io/path: /metrics
+    prometheus.io/port: "9102"
+  labels:
+    application-ID: my-app
+    stage: dev
+    release: release-nr
+spec:
+  containers:
+  - name: nginx
+    image: nginx: 1.14.2 
+    ports:
+    - containerPort: 80
+
+
+kubectl describe pod pod-name # to see the annotations
+
+
+
+Selectors
+*********
+	1. Selectors allows to filter the objects based on labels
+	2. The API currently supports two types of selectors: equality-based and set-based 
+	3. A label selector can be made of multiple requirements which are comma-separated 
+	4. Use the -l or --selector option to specify these criteria to filter the name of the object
+
+
+
+• Equality-based requirement( =, !=, == )
+	
+	env=prod
+	tier!=frontend
+	env==test
+
+	1. Three operators used in equality-based selectors are = , ==, != 
+	2. The first two represent equality (and are simply synonyms), while the latter represents inequality
+		Ex: env= prod, tier != frontend
+	3. The first selector above represents key equal to environment and value equal to production. The latter selects all resources with key equal to tier and value distinct from frontend
+
+	NOTE: Equality-based Selector are used by Replication Controllers and Services
+
+	apiVersion: v1
+	kind: Pod
+	metadata:
+	  name: cuda-test
+	spec:
+	  containers:
+		- name: cuda-test
+		  image: 'k8s.gcr.10/cuda-vector-add:v0.1"
+		  resources:
+			limits:
+			  nvidia.com/gpu: 1
+	  nodeSelector:
+		accelerator: nvidia-tesla-p100
+
+
+	kubectl get nodes --show-labels
+
+		beta.kubernetes.io/arch=amd64,
+		beta.kubernetes.io/os=linux,
+		kubernetes.io/arch=amd64,
+		kubernetes.io/hostname=kmaster.example.com,
+		kubernetes.io/os=linux,
+		node-role.kubernetes.io/control-plane=,
+		node.kubernetes.io/exclude-from-external-load-balancers=
+
+	kubectl label nodes node_name  master=true
+
+• Set-based requirement(In,NotIn,Exists,DoesNotExist)
+	env In (prod,qa)
+	tier NotIn (frontend,backed)
+	env Exists (test)
+
+	1. Set-based label requirements allow filtering keys according to a set of values 
+	2. Three kinds of operators are supported: In, NotIn, Exists and DoesNotExists(only the key identifiers)
+	Ex: env In (prod, qa)
+		tier NotIn (frontend, backend)
+		partition 
+		!partition
+
+		1. Here, the first selector will selects all resources with key equal to environment and value equal to production or qa
+		2. The second selects all resources with key equal to tier and values other than frontend and backend
+		3. The third example selects all resources that includes a label with key partition; no values are checked.
+		4. The fourth checks selects the resources with no partition key
+		5. The set-based label selector is a general form of equality based selector as environment=production is equivalent to environment in (production) and similarly != is equivalent to notin
+
+	NOTE: Set-based Selector are used ReplicaSets, Deployments,DaemonSets
+
+	selector: 
+		matchLabels:
+			component: redis
+		matchExpressions:
+			- (key: tier, operator: In, values: [cache]) 
+			- (key: environment, operator: NotIn, values: [dev]}
+
+	NOTE: Selectors can be both matchLabels and matchExpressions, If you specify both, the result is ANDed.
+
+
+
+
+Demo- Lables and Selectors:
+---------------------------
+Create 5 pods with different labels
+
+kubect1 run nginx-1 --image=nginx -l env=dev,tier=front-end, ingress=true 
+kubectl run nginx-2 --image=nginx -l env=dev, tier=back-end, ingress=false 
+kubect1 run nginx-3 --image=nginx -l env=prod, tier=front-end, ingress=true 
+kubectl run nginx-4 --image=nginx -l env=prod, tier=back-end, ingress=false 
+kubect1 run nginx-5 --image=nginx -l env=qa, tier=db
+
+
+
+kubectl get pods -l "env=dev" # display the pods with label as env=dev
+kubectl get pods --selector "env=prod"
+
+kubectl get pods --selector "env=prod, env=dev"  #it gives no resources 
+
+kubectl get pods --selector "env in (prod,dev)"  #it gives pods which are both in prod and dev
+kubectl get pods -l "env in (prod,dev)"
+
+
+kubectl get pods --selector "env=prod, tier=db"
+kubectl get pods -l "env=prod, tier=db"
+
+kubectl get pods --selector "! env" #it give pods which does not have key as env
+kubectl get pods -l "! env"
+
+kubectl get pods --selector "env" #it give pods which have key as env
+kubectl get pods -l "env"
+
+Select pods with env=dev and tier not equal to front-end
+	
+	kubectl get pods -l "env=dev, tier!=front-end"
+
+
+Select pods with env = dev or qa
+		
+	kubectl get pods -l "env in (dev, qa)"
+
+Select pods with no label ingress 
+	
+	kubectl get pods -l "! ingress' 
+	kubectl get pods -l "env=qa, ! ingress"
+
+
+selector:
+  matchLabels: # Equality
+    component: redis
+  matchExpressions: # Set based
+    - {key: tier, operator: In, values: [fe, be]}
+    - {key: environment, operator: NotIn, values: [dev, prod]}
+    - {key: release, operator: Exists}
+    - {key: upgrade, operator: Does NotExists}
+
+
+selector: 
+  matchLabels: # Equality
+	component: redis
+  matchExpressions: # Set based 
+	- key: tier
+      operator: In
+      values:
+       - fe
+       - be
+	- key: environment 
+	  operator: NotIn 
+	  values: [dev, prod]} 
+	- key: release 
+	  operator: Exists
+	- key: upgrade 
+	  operator: DoesNotExists
+
+
+
+
+
+
+
+
+
+Pod -> kubectl run nginx --image=nginx -l component=redis,tier=fe,environment=uat,release=v2,upgrade=true
+I
+kubectl get po --selector "tier in (fe,be)"
+kubectl get po --selector "env notin (fe, be)"
+kubectl get po --selector "tier"
+kubectl get po --selector "! tier"
+
+
+
+
+
+kubectl get pod -l 'label in (value1,value2)'
+kubectl get pod pod_name -l 'label in (value1,value2)'
+kubectl get pods -l 'label in (value1,value2)'
+
+kubectl get pods -l 'env in (prod,test)'
+
+
+
+
+
+Note: All Manifest files are inside /manifest/others in Git repo
+		github.com/kunchalavikram1427/Kubernetes_public

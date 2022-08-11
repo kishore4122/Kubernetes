@@ -1,0 +1,256 @@
+Container Orchestration
+***********************
+	1. Container orchestration automates the deployment, management, scaling, and networking of containers across the cluster. It is focused 	on managing the life cycle of containers.
+	2. Enterprises that need to deploy and manage hundreds or thousands of Linux containers and hosts can benefit from container orchestration.
+	3. Container orchestration is used to automate the following tasks at scale:5-3
+
+		- Configuring and scheduling of containers 
+		- Provisioning and deployment of containers
+		- Redundancy and availability of containers: Desired vs Current state
+		- Scaling up or removing containers to spread application load evenly across host infrastructure
+		- Movement of containers from one host to another if there is a shortage of resources in a host, or if a host dies
+		- Allocation of resources between containers
+		- External exposure of services running in a container with the outside world
+		- Load balancing of service discovery between containers
+		- Health monitoring of containers and hosts
+
+	1. Let's say a Major online shopping platform announced a holiday sale with a bunch of offers on all products 
+	2. During the sale, the online portal experiences a huge rise in the user traffic to their web application, which can slow down the UI including high chances of site itself going down 
+	3. We need to increase the number of instances/scale up the number of containers during that peak time to handle the load
+	4. We cannot forecast the load nor want to increase the instances manually. We need some agent/program that can automatically does that for us
+	5. Also, once the festive offer is finished, the total number of containers of the application should be reduced as there won't be any load
+	6. To enable this functionality we need an underlying platform with a set of resources and capabilities that canautomatically scale up or down based on the load
+	7.This while process of deploying and managing containers is known as container orchestration
+
+Docker Swarm
+************
+	1. Docker Swarm is an open-source container orchestration platform and is the native clustering engine for and by Docker
+	2. It is used to efficiently manage, deploy, and scale a cluster of nodes on Docker
+	3. Any software, services, or tools that run with Docker containers run equally well in Swarm
+	4. It is an alternative to Kubernetes, manages containers and turns the desired state into reality
+	5. It also fixes any future deviations from the desired state 
+	6. Docker CLI manages creation of a swarm, deploy application services to a swarm, and manage swarm behaviour
+
+
+	- More on Load Balancing and DNS Service Discovery in Docker Swarm using HAProxy
+		https://www.haproxy.com/blog/haproxy-on-docker-swarm-load-balancing-and-dns-service-discovery/
+
+Docker Swarm VS Kubernetes
+**************************
+Docker Swarm is a lightweight, easy-to-use orchestration tool with limited offerings compared to Kubernetes. 
+In contrast, Kubernetes is complex but powerful and provides self-healing, auto-scaling capabilities out of the box.
+
+	Features					Kubernetes							Docker Swarm
+	--------					----------							------------
+1. Installation & Cluster 		Installation is complicated; 		stallation is very simple; 
+Configuration					but once setup, 					but cluster is not very strong
+								the cluster is very strong
+
+2. GUI							GUI is the kubernetes dashboard		There is no GUI, only 3rd party tool(dockerswarm/visulizer)
+
+3. Scalability					Highly Scalable & scales fast 		Highly Scalable & scales 5x faster than Kubernetes
+
+4. Auto-Scaling					Kuberbetes can do Auto-Scaling		DockerSwarm can not do Auto-Scaling
+
+5. Rolling Updates &			Can deploy Rolling Updates &		Can deploy Rolling Updates, 
+   Rollbacks					does automatic Rollbacks			but not automatic Rollbacks
+
+6. Data Volumes					Can share Storage Volumes only 		Can share Storage Volumes with any
+								with other containers in same pod 	other container
+
+7. Logging & Monitoring			In-built tool 						3rd party tool like ELK should be used
+
+
+
+Kubernetes
+**********
+	1. Kubernetes, also known as K8s, is an open-source Container Management tool 
+	2. It provides a container runtime, container orchestration, container-centric infrastructure orchestration, self-healing mechanisms, service discovery, load balancing and container (de) scaling.
+	3. Initially developed by Google, for managing containerized applications in a clustered environment but later donated to CNCF
+	4. Written in Golang
+	5. It is a platform designed to completely manage the life cycle of containerized applications and services using methods that provide predictability, scalability, and high availability 
+	6. Kubernetes has many moving parts and there are countless ways to configure its pieces - from the various system components, network transport drivers, CLI utilities not to mention applications and workloads
+
+
+	"Kubernetes is an open source container orchestration platform developed by Google. It helps manage distributed clusters of containers, often used for microservices and other distributed applications. Kubernetes is highly resilient and supports zero downtime, rollback, scaling, and container self-healing."
+
+Certified Kubernetes Distributions
+**********************************
+	1. Cloud Managed: EKS by AWS(eksctl), AKS by Microsoft, GKE by google, KOPS
+	2. Self Managed: OpenShift by Redhat and Docker Enterprise
+	3. Local dev/test: Micro K8s by Canonical, Minikube, Kind and more....
+	4. Vanilla Kubernetes: The core Kubernetes project(BareMetal), Kubeadm 
+	5. Special builds: K3s by Rancher (for rasberrypi), a light weight K8s distribution and lot more...
+
+	https://www.cncf.io/certification/software-conformance/
+
+Kubernetes Alternatives
+***********************
+Kubernetes is extremely powerful, yet difficult to learn and operate.	This has given rise to an industry that aims to make Kubernetes easier to adopt and use.
+
+The primary options you can choose instead of Kubernetes are:
+
+	1. Container as a Service (CaaS)- services like AWS Fargate, Azure Container Instances, ECS, which allow you to manage containers at scale without the complex orchestration capabilities provided by Kubernetes.
+	2. Managed Kubernetes services Google Kubernetes Engine (GKE), Amazon Elastic Kubernetes Service (EKS), Azure Kubernetes Service (AKS), DigitalOcean, CIVO, Codefresh, which let you run managed, hosted Kubernetes clusters.
+	3. PaaS using Kubernetes- several providers, such as OpenShift Container Platform and Rancher, offer complete cloud computing platforms, which have Kubernetes at their core, but offer simpler operation and built-in capabilities like security, networking, monitoring and dashboards. 
+	4. Lightweight container orchestrators-Docker Swarm and Nomad are two examples of capable mature orchestrators, which are much less complex to use and maintain than Kubernetes.
+
+
+KubernetesCluster
+*****************
+	1. A Kubernetes cluster is a set of physical or virtual machines and other infrastructure resources that are needed to run your containerized applications. Each machine in a Kubernetes cluster is called a node 
+	2. A node is the smallest unit of computing hardware in Kubernetes, likely be either a physical machine in a datacenter, or virtual machine hosted on a cloud provider like AWS, Azure, GCP or even small computing devices like RaspberryPi
+	3. There are two types of node in each Kubernetes cluster:
+		Master node(s): hosts the Kubernetes control plane components and manages the cluster 
+		Worker node(s): runs your containerized applications
+
+Master Node & Control Plane
+***************************
+	1. Master is responsible for managing the complete cluster. 
+	2. You can access master node via the CLI, GUI, or API 
+	3. The master watches over the nodes in the cluster and is responsible for the actual orchestration of containers on the worker nodes
+	4. For achieving fault tolerance, there can be more than one master node in the cluster - High Availability cluster setup
+	5. It is the access point from which administrators and other users interact with the cluster to manage the scheduling and deployment of containers.
+	6. It has four components: ETCD, Scheduler, Controller and API Server together known as Control Plane.
+
+	https://kubernetes.io/docs/concepts/overview/components/
+
+	API server
+	**********
+		1. Exposes k8s APIs and serves like front end for the control plane
+		2. Masters communicate with the rest of the cluster through the kube-apiserver
+		3. It validates and executes user's REST commands
+		4. kube-apiserver also makes sure that configurations in etcd match with configurations of containers deployed in the cluster.
+
+	Controller manager
+	******************
+		1. The controllers are the brain behind orchestration
+		2. They are responsible for noticing and responding when nodes, containers or endpoints goes down. The controllers makes decisions to bring up new containers in such cases
+		3. The kube-controller-manager runs control loops that manage the state of the cluster by checking if the required deployments, replicas, and nodes are running in the cluster
+			Ex: Node controller, Replication controller, Endpoint controller, Job controller etc
+
+	ETCD
+	****
+		1. ETCD is a distributed, reliable key-value store used by Kubernetes to store all data used to manage the cluster 
+		2. When you have multiple nodes and multiple masters in your cluster, etcd stores all that information on all the nodes in the cluster in a distributed manner
+		3. ETCD is responsible for implementing locks within the cluster to ensure there are no conflicts between the Masters
+
+	Scheduler
+	*********
+		1. The scheduler is responsible for distributing work or containers across multiple nodes 
+		2. It looks for newly created containers and schedules them onto the Nodes 
+		3. Scheduling decisions include factors such as: pod resource requirements, hardware/software/policy constraints, affinity and anti-affinity rules, taints and tolerations etc
+
+Worker Node
+***********
+	Kubelet
+	*******
+		1. Worker nodes have the kubelet agent that is responsible for interacting with the master
+		2. Carry out actions requested by the master on the worker nodes
+		3. The kubelet takes a set of PodSpecs that are provided through various mechanisms and ensures that the containers described in those PodSpecs are running and healthy
+		4. Reporting the health status of the node and each pod/container 
+		5. The kubelet doesn't manage containers which were not created by Kubernetes. Ex: Containers created using docker commands
+
+	Kube proxy
+	**********
+		1. kube-proxy is a network proxy that runs on each node in your cluster, implementing part of the Kubernetes Service concept
+		2. It routes traffic coming into a node from the service and forwards requests to the correct pods
+		3. A Kubernetes service manages a collection of pods and the service gets an IP address. Kube-dns resolves Kubernetes service DNS names to its IP addresses. Kube-proxy sets up iptables rules in the host in such a way that the traffic coming to services gets forwarded to the pods in random load balancing fashion
+
+	Controller Runtime
+	******************
+		1. It is the underlying software that is used to run containers, like Docker, but there are other options as well such as:
+
+			- Docker (via a CRI shim)
+			- rkt
+			- CRI-O
+			- Containerd 
+			- Podman
+			- Kaniko (Only build images)
+
+		2.The major design policy is that Kubernetes itself should be completely decoupled from specific runtimes. The Container Runtime Interface (CRI) enables it.
+
+In short
+--------
+	Kubernetes consists of a set of independent components that run as separate processes on the nodes of a cluster. Some components run on the master nodes and others run on the worker nodes, and each component has a very specific function.
+		
+		These are the most important components on the master nodes:
+			1. Storage backend: stores resource definitions (usually etcd is used)
+			2. API server: provides Kubernetes API and manages storage backend 
+			3. Controller manager: ensures resource statuses match specifications 
+			4. Scheduler: schedules Pods to worker nodes
+
+		And this is the most important component on the worker nodes:
+			1. Kubelet: manages execution of containers on a worker node
+			2. Container Runtime: Runs containerized applications	
+			3. Kube-proxy: runs on each worker node as the network proxy. It listens to the API server for each service point creation or deletion. For each service point, kube-proxy sets the routes so that it can reach to it. In simple, it just redirects requests from Services to 'Pod IP
+
+Kubectl
+*******
+	1. kubectl is the command line utility using which we can interact with k8s cluster, like a client
+	2. Kubernetes is fully controlled through its REST API
+	3. Every Kubernetes operation is exposed as an API endpoint and can be executed by an HTTP request to this endpoint
+	4. Kubectl uses these APIs to interact with the cluster
+	5. Can deploy and manage applications on a Kubernetes
+
+	$kubectl run nginx - deploy an application/pod to the cluster 
+	$kubectl cluster-info - view information about the cluster
+
+	$kubectl get nodes - list all the nodes that are part of the cluster
+	$kubectl get componentstatuses - get health status of control plane components
+
+
+CNI (container networking interface) VS Kube-Proxy VS Kube-DNS
+**************************************************************
+Kube-Proxy
+**********
+	Here's how Kubernetes services work! A service is a collection of pods, which each have their own IP address (like 10.1.0.3, 10.2.3.5, 10.3.5.6)
+		1. Every Kubernetes service gets an IP address (like 10.23.1.2)
+		2. kube-dns resolves Kubernetes service DNS names to IP addresses (so my-svc.my-namespace.svc.cluster.local might map to 10.23.1.2)
+		3. kube-proxy sets up iptables rules in order to do random load balancing between them. Kube-proxy also has a userspace round-robin load balancer but my impression is that they don't recommend using it.
+	So when you make a request to my-svc.my-namespace.svc.cluster.local, it resolves to 10.23.1.2, and then iptables rules on your local host (generated by kube-proxy) redirect it to one of 10.1.0.3 or 10.2.3.5 or 10.3.5.6 at random.
+
+	https://stackoverflow.com/questions/53534553/kubernetes-cni-vs-kube-proxy
+	https://jvns.ca/blog/201/10/10/operating/-a-kubernetes-network/
+
+CRE (container Runtime Environment) VS CRI VS DockerShim
+********************************************************
+Container Runtime Environment (CRE)
+-----------------------------------
+	1. Containers are not first class objects in the Linux kernel
+	2. Containers are fundamentally composed of several underlying kernel primitives: namespaces (who you are allowed to talk to), cgroups (the amount of resources you are allowed to use), and LSMS (Linux Security Modules-what you are allowed to do). Together, these kernel primitives allow us to set up secure, isolated, and metered execution environments for our processes 
+	3. Creating these environment manually each time we want to create a new isolated process would be tiresome and error prone
+	4. To avoid this, all the components have been bundled together in a concept called a container 
+	5. The container runtime is the software that is responsible for running these containers
+	6. The runtime executes the container, telling the kernel to assign resource limits, create isolation layers (for processes, networking, and filesystems), and so on, using a cocktail of mechanisms like control groups (cgroups), namespaces, capabilities, SELinux etc
+	7. For Docker, docker run is what creates and runs the container, behind the scenes it is runc that is doing the process
+	8. Kubernetes supports several container runtimes: Docker, containerd, CRI-O, rtk etc
+
+Container Runtime Interface (CRI)
+---------------------------------
+	1. CRI was introduced in Kubernetes 1.5 and acts as a bridge between the kubelet and the container runtime 
+	2. High-level container runtimes that want to integrate with Kubernetes are expected to implement CRI. The runtime is expected to handle the management of containers, pods, images etc
+	3. When kubelet wants to run the workload, it uses CRI to communicate with the container runtime running on that same node
+	4. In this way, CRI is simply an abstraction layer or API that allows you to switch out container runtime implementations instead of having them baked into the kubelet
+	5. K8s after trying to support multiple versions of kubelet for different container runtime environments, and trying to keep up with the Docker interface changes, it decided to set a standard interface (CRI) to be implemented by all container runtimes
+	6. This is to avoid large codebase for kubelet for supporting different Container Runtimes
+	7. To implement a CRI, a container runtime environment must be compliant with the Open Container Initiative (OCI)
+	8. OCI includes a set of specifications that container runtime engines must implement and a seed container runtime engine called runc, s a CLI tool for spawning and running containers according to the OCI specification
+
+
+Kubernetes deprecated Docker
+*****************************
+	1. Kubernetes is deprecating Docker as a container runtime after version 1.20, in favor of runtimes like containerd that use the Container Runtime Interface (CRI) created for Kubernetes 
+	2. Kubernetes is actually deprecating dockershim, which is a component in Kubernetes' kubelet implementation, communicating with Docker Engine
+	3. Docker does not support Kubernetes Runtime API called CRI(Container Runtime Interface) and Kubernetes have been using a bridge service called dockershim. It converts Docker API and CRI, but it will no longer be provided from Kubernetes side within a few minor releases 
+	4. Kubernetes actually needs only container runtime. It doesn't need extra features provided by Docker like Docker Networks and Volumes which are never used by K8s and having them could pose a security risk. The less features you have, the smaller the attack surface becomes
+
+	Docker support in the kubelet is now deprecated and will be removed in a future release. The kubelet uses a module called dockershim which implements CRI support for Docker, and it has seen maintenance issues in the Kubernetes community. It is advised to evaluate moving to a container runtime that is a full-fledged implementation of CRI (v1alpha1 or v1 compliant) as they become available.
+
+					CRI
+	Docker   kublet ---> dockershim ---> Docker ---> Containerd ---> Containers
+
+					CRI
+Containerd   kublet ---> CRI-Containerd ---> Containerd ---> Containers	 
+
+	With docker being deprecated we should now use container runtimes like containerd, rkt, cri-o which supports container runtime interfaces developed for K8s.

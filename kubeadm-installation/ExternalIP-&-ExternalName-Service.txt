@@ -1,0 +1,143 @@
+Service Without Pods
+********************
+	• Kubernetes Services abstract one or more pods behind a layer by using pod labels as selectors
+	• In some cases, we might need to create services without any pods binding to it. In cases such as
+		✓ Applications need to refer to external services outside the Kubernetes cluster 
+		✓ Service in one namespace needs to access service in another namespace
+		✓ Communication between applications running in on-prem to one's running in cloud. etc.,
+	• External services may use IP addresses or a DNS name
+
+	• Without pod selectors, Endpoints for a service won't be created automatically 
+	• Endpoints are Kubernetes objects that track which pods are tied to a service so that the service can direct traffic to them.
+		
+		kubectl get ep <service-name>
+
+	• In order to route traffic from service to other resources, we need to manually create endpoints for that service
+		
+		root@k8s-master: /home/osboxes # kubectl get ep headless-flask
+		NAME				ENDPOINTS
+		▸headless-flask		10.244.1.16:5000, 10.244.2.227:5000, 10.244.2.228:5000
+
+
+External Services through IP
+****************************
+	• Notice that the service manifest doesn't have Selectors field
+	• We need to create endpoints manually so that service can forward requests to
+	• In this example, traffic originating at the service on port 80 will be forwarded to external service running at external IP and port 5000 mentioned in the endpoint
+
+	• Both Endpoint name and service name should be equal
+	
+	• Not all IPs can be used as External IPs. Loopback address, ClusterlP range to be avoided
+
+	NOTE: To find clusterlP range in the cluster, run
+			
+			kubectl cluster-info dump | grep service-cluster-ip-range
+			
+			kubeadm config view | grep Subnet - for KUBEADM clusters only
+
+
+	$ cat external-svc-ip.yml 
+		apiVersion: v1 
+		kind: Service 
+		metadata:
+		  name: flask-backend
+		spec: 
+		  ports: 
+		  - protocol: TCP 
+		    port: 80 
+		    targetPort: 5000
+		---
+		apiVersion: v1 
+		kind: Endpoints
+		metadata:
+		  name: flask-backend
+		subsets:
+		  - addresses:
+		    - ip: 192.168.0.100   #External IP
+		    ports:
+			- port: 5000  #External Port
+
+
+• To demonstrate ExternalIP service, run a docker container in any worker node using docker run and use External IP as node IP
+
+	docker run -d --name flask -p 5000:5000 kunchalavikram/hello-flask: v1
+
+• In the cluster, run a temp pod and query the service DNS 
+	
+	kubectl run nginx --rm -it --image=nginx -- sh
+
+	/# curl flask-backend
+
+
+
+
+
+External Services through External Name/DNS
+*******************************************
+	• ExternalName maps a Service to a DNS name 
+	• IP addresses are not allowed
+	• .spec.externalName attribute can be used to specify a DNS name or a service in another namespace
+
+
+
+	$ cat external-svc-dns-01.yml DevOp
+		apiVersion: v1 
+		kind: Service
+		metadata:
+		  name: externalsvc-dns
+		spec:
+		  type: ExternalName
+		  externalName: catfact.ninja  # External DNS
+
+
+	• In the cluster, run a temp pod and query the service DNS 
+	
+	kubect1 run nginx --rm -it --image=nginx -- sh
+	/# curl externalsvc-dns
+
+
+example 2
+----------
+	kubectl create ns dev
+
+	apiVersion: v1
+	kind: Service
+	metadata:
+	  name: externalsvc-dns
+	spec:
+	  type: External Name
+	  externalName: clusterip-flask.prod.svc.cluster.local # FQDN
+	--
+	apiVersion: v1
+	kind: Service
+	metadata:
+	  name: clusterip-flask
+	  namespace: prod
+	spec:
+	  type: Cluster IP
+	  ports:
+	  - name: http 
+		port: 80
+		targetPort: 5000
+		protocol: TCP
+	  selector:
+		app: flask
+	---
+	apiVersion: v1 
+	kind: Pod
+	metadata:
+	  namespace: prod 
+	  name: flask-pod
+	  labels:
+	    app: flask
+	spec:
+	  containers:
+	  - name: flask-container
+		image: kunchalavikram/hello-flaşk:v1
+		ports:
+		- containerPort: 5000
+
+
+
+	kubectl run -it --image=nginx:alpine --restart=Never --rm -- sh
+	/# curl externalsvc-dns

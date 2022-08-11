@@ -1,0 +1,182 @@
+Namespaces (https://kubernetes.io/docs/concepts/services-networking/dns-pod-service)
+**********
+	• Namespaces are Kubernetes objects which partition a single Kubernetes cluster into multiple virtual clusters
+	• Kubernetes cluster can manage large numbers of workloads concurrently and organizations often choose to deploy projects created by separate teams to shared clusters
+	• With multiple deployments in a single cluster, there are high chances of someone deleting objects belong to a different project/team
+	• Kubernetes Namespaces allows different teams, projects or customers share a same Kubernetes Cluster
+	• Namespaces allow you to logically group objects together so you can filter and control them as a unit/group
+
+	• You can restrict a user access to a specific namespace so as to protect the workloads/objects from being deleted which are owned by other users/projects 
+	• Namespaces provide a scope for names. Names of (pod, deployments etc) need to be unique within a namespace, but not across namespaces
+	• So, each Kubernetes namespace provides the scope for Kubernetes Names it contains; which means using the combination of an object name and a namespace, each object gets a unique identity across the cluster 
+	• Not all objects in Kubernetes are namespaced. Ex: objects like nodes and persistentVolumes are not bound to a specific namespace. They are cluster wide resources to be accessible by all objects in the cluster
+
+
+	• To get list of resources that are namespaced
+		kubectl api-resources --namespaced=true 
+		kubectl api-resources --namespaced=false
+
+
+	• Using namespaces we split entire cluster into multiple subclusters like Production, Development, Test and QA
+	• Resources in the same space can talk to each other by their object names. But across the cluster they should use FQDN (Fully Qualified Domain Name)
+	• If a pod wants to communicate with other pods, it goes through service. If destination pod is in different namespace, use FQDN service_name.namespace.subdomain.cluster.local
+
+
+DNS
+***
+Every service defined in the cluster is assigned a DNS name. A pod's DNS search list will include the pod's own namespace and the cluster's default domain.
+
+	Service Name 	Namespace 	Base Domain Name
+	kubernetes.		default.	svc.cluster.local (kubernetes.default.svc.cluster.local)
+
+	• If pod from QA wants to talk to a pod in dev namespace, use dev-service.dev.svc.cluster.local
+
+	• Here, svc is the subdomain for service and cluster.local is the default domain
+	• You can also shorten the FQDN by removing the cluster.local leaving FQDN to dev-service.dev.svc
+
+
+Namespaces and DNS
+******************
+	• When you create a Service, it creates a corresponding DNS entry
+	• This entry is of the form <service-name>.<namespace>.svc.cluster.local, whichmeans that if a container just uses <service-name>, it will resolve to the service which is local to anamespace
+	• If you want to reach across namespaces, you need to use the fully qualified domain name (FQDN) <service-name>.<namespace>.svc.cluster.local
+
+
+Default Namespaces
+******************
+	1. default: It's a default namespace for users. By default, all the resource created in Kubernetes cluster are created in the default namespace
+	
+	2. Kube-system: It is the Namespace for objects created by Kubernetes systems/control plane. Any changes to objects in this namespace would cause irreparable damage to the cluster itself
+	3. kube-public: Created automatically and is readable by all users (including those not authenticated). This is mostly reserved for cluster usage, in case that some resources should be visible and readable publicly throughout the whole cluster
+	
+	4. kube-node-lease: This namespace holds Lease objects associated with each node. Node leases allow thekubelet to send heartbeats so that the control plane can detect node failure
+
+
+Imperative
+----------
+	kubectl get ns
+	kubectl get --namespace
+	kubectl get ns -A
+	kubectl get --all-namespace
+
+	kubectl get ns --show-labels
+
+	kubectl create ns <namespace_name>
+	kubectl create ns dev
+
+	kubectl delete ns dev
+
+
+
+declartive
+----------
+example: namespace.yml
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+
+kubectl apply -f namespace.yml
+
+example: pod-namespace.yml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  namespace: dev
+  labels:
+    app: myapp
+spec:
+  containers:
+  - name: nginx
+    image: nginx:alpine
+
+
+  kubectl apply -f pod-namespace.yml
+  kubectl apply -f pod-namespace.yml -n dev
+
+  kubectl apply -f pod-namespace.yml -n prod  # it gives an error
+
+
+example: multi-pod.yml 
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: prod
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod-1
+  namespace: prod
+  labels:
+    app: myapp
+spec:
+  containers:
+  - name: nginx-container-1
+    image: nginx:alpine
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod-2
+  namespace: prod
+  labels:
+    app: myapp
+spec:
+  containers:
+  - name: nginx-container-2
+    image: nginx:alpine
+
+
+ kubectl apply -f multi-pod.yml  # it first create the prod namespace and then create the pods in the newly created namespace(prod)
+
+
+Kubectx utility
+***************
+Using --namespace or -n with all the commands can be time consuming. We can permanently switching to another namespace by changing the current context's namespace(Contexts to be covered later)
+	
+	kubectl config set-context --current --namespace=<insert-namespace-name-here> 
+	kubect1 config set-context --current --namespace=dev 
+	kubectl config view
+
+We have now switched to dev namespace and installed a pod without passing a namespace flag. The pod is installed in dev namespace as current context points to dev
+
+NOTE: To switch contexts easily, use kubectx tool https://github.com/ahmetb/kubectx
+
+
+What else we can do?
+1. Role Based Access Control (RBAC)
+2. Network Policies 
+3. Resource Quotas
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Question:I have only one cluster and i want to use it for my dev, prod and test
+
+Answer:Use NAMESPACES
+
+Question:What if my dev resources consuming most of my cluster
+
+Answer: then restrict the dev namespace with ResourceQuota

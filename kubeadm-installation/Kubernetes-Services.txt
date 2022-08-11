@@ -1,0 +1,341 @@
+Why Services are needed?
+************************
+Imagine a web application, with front-end and a database, is to deployed inside the kubernetes cluster. Some of the challenges that arise are:
+	1. How do front-end pods communicate with backend database pods? Through IP or DNS name? 
+	2. Pods are ephemeral. When they die, a new pod takes its place with a new IP address and new name. If they are management by a deployment controller, each pod will have a random hash appended to the name of the pod
+	3. How do we rely on IP/DNS names of the pods when they change every time a pod dies and a new one replaces it with entirely new identity?
+	4. How do we load balance the requests among various pod replicas? If there are 3 back-end pod replicas, how do we ensure that the requests are distributed to avoid overloading a specific pod? 
+	5. How to expose the pods outside the cluster to make the application available for public use?
+
+Why Services are need
+*********************
+	1. Pod to Pod communication is not possible with names. 
+	2. Pod IP addresses and Pod names are not stable. They keep changing when the Pod is restarted.
+	3. So we create services so that it can forward the traffic to Pods.
+	4. The Service resolve the IP addresses to names using CoreDNS
+
+Services
+********
+	• Kubernetes Service is an abstraction which defines a logical set of Pods running somewhere in your cluster, that all provide the same functionality 
+	• When created, each Service is assigned a unique IP address
+	• This address is tied to the lifespan of the Service, and will not change while the Service is alive
+	• Pods can be configured to forward traffic to the Service, and the Service willautomatically forward that traffic to any of its member pods in a load-balanced way 
+	• Kubernetes Service provides the IP Address, a single DNS name, and a Load Balancer to a set of Pods
+	• A Service identifies its member Pods with a selector. For a Pod to be a member of the Service, the Pod must have all of the labels specified in the selector of the service 
+	• A label is an arbitrary key/value pair that is attached to an object
+	• Services are namespaced objects in K8s
+
+	• A Service is a resource you create to make a single, constant point of entry to a group of pods providing the same application service 
+	• Each service has an IP address and port that never change as long as the service exists 
+	• Clients pods in the cluster can openconnections to service's IP and port, and those connections are then routed to one of the pods backing that service
+	• Clients need not know the location ofdestination pods or where your application pods are running
+	• Service automatically removes unhealthy pods from its load balancing
+
+Services as load balancers
+**************************
+• A service can be backed by more than one pod 
+• It uses pod labels as the selectors to manage them
+• Requests to the service are load-balanced across all the pods it manages
+
+
+
+kubectl expose
+**************
+→ Imperative
+	The easiest way to create a service is through kubectl expose 
+
+	kubect1 expose exposes Kubernetes objects such as pod, replication controller, and service as a new Kubernetes service object
+
+	Syntax:
+	
+	kubectl expose --help
+	kubectl expose (-f FILENAME | TYPE NAME) [--port=port] [--protocol=TCP|UDP] [--target-port=number-or-name] [--name=name] [--external-ip=external-ip-of-service] [--type=type]
+
+	Create a ClusterIP service through kubectl expose
+	kubectl expose pod web-app --port=80 --target-port=5000 --type=ClusterIP
+
+
+	kubectl describe <service-name>
+
+	kubectl get enpoints
+	kubectl describe ep <serice-name>
+
+	Demo 1
+	------
+	Run a pod based on flask at port 5000
+	kubectl run web-app --image=kunchalavikram/sampleflask:v1 --port=5000
+
+	kubectl run temp --image=nginx:alipine --port=80
+
+	kubectl expose pod <pod_name> --port=80 --target-port=<container-port> --name=my-svc
+	kubectl expose pod web-app --port=80 --target-port=5000 --name=my-svc
+
+
+	kubectl exec -it pod-name -- command
+	kubectl exec -it temp --sh
+	/ # curl <service-name>:<port-number>
+	/ # curl my-svc:80
+
+	Demo 2
+	------
+	kubectl create deployment nginx --image=nginx:latest --port=80 --replicas=3
+
+	kubectl expose deploy nginx --port=8080 --target-port=80 --name=my-nginx-svc
+
+
+	Deno 3
+	------
+	kubectl create ns dev
+
+	kubectl create deployment web -n dev --image=kunchalavikram/go-app-ms:latest --port=80
+	kubectl expose deployment web --port=80 --target-port=80 -n dev --type=ClusterIP
+	
+	kubectl run test --image=nginx:alpine -n dev
+	kubectl exec -it test -n dev --sh
+	/ # cat /etc/resolv.conf
+	/ # curl web:80
+
+
+	kubectl run test --image=nginx:alpine -n default
+	kubectl exec -it test -n default --sh
+	/ # cat /etc/resolv.conf
+	/ # curl web:80  #it gives an error
+	/ # curl web.dev:80 #it gives you output. Because it contact the serviec in dev namspace and gives you result
+
+
+
+	Demo 4
+	-------
+	Create pod and service at the same time
+
+	kubectl run web-app --image=kunchalavikram/sampleflask:v2 --port=5000 --expose --dry-run=client
+
+	kubectl delete pod/web-app svc/web-app
+
+
+
+
+
+
+
+
+Service Types
+*************
+ClusterIP
+NodePort
+LoadBalancer
+Headless
+ExternalName
+
+
+
+Cluster IP
+**********
+	• ClusterIP service is the default Kubernetes service
+	• It gives you a service inside your cluster that other apps inside your cluster can access
+	• It restricts access to the application within the cluster itself and no external access
+	• Useful when a front-end app wants to communicate with back-end pods or any pod to pod communication within the cluster
+	• Each ClusterIP service gets a unique IP address inside the cluster
+	• Similar to --links in Docker
+
+
+		$ cat flask-clusterip.yml
+		-------------------------
+		apiVersion: v1 
+		kind: Service 
+		metadata:
+		  name: clusterip-flask
+		spec: 
+		  type: ClusterIP
+		  ports: 
+		  - name: http 
+		    port: 80
+			tarastPort: 5000
+			protocol: TCP 
+		  selector:
+			app: flask-backend
+
+
+
+
+	Services: ClusterIP
+	-------------------
+	• Services can be defined through YAML files and can be deployed using kubectl apply -f <service-file>.yml
+	
+	• port of the service in the manifest file represents the actual port that service listens on. If service listens on port 3000, we can access the service through its<service-name> : 3000
+
+	• targetPort represents the actual container port of the Pod. It should match the containerPort in the pod manifest file
+
+	• You can also define multiple ports for a service each with a unique name
+	• type represents the type of service
+	
+	• selector should match the labels of pod. Otherwise service will not manage them
+
+	
+	kubectl create deployment flask-deployment --image=kunchalavikram/sampleflask:v2 --port=5000
+	kubectl apply -f flask-clusterip.yml
+
+	Get pods, services, deployments, endpoints 
+		kubectl get po,rs,deployment,svc,ep -o wide
+
+	• Now, use the IP of the service to connect to the pods using a temporary nginx pod
+	• Notice that, the request gives different responses as the service load balances them among all the available pods it manages
+	• In this case, few requests will be forwarded to pod-1 and few to pod-2
+
+
+	kubectl get po,svc -o wide
+
+	kubectl exec -it --rm nginx --image=nginx -- sh
+	/ # curl <ip-of-pod>
+
+
+	But how do pods resolve the DNS name of the service?
+	----------------------------------------------------
+	1. It is made possible through DNS server in K8s. Each pod gets the DNS server configured in the resolv.conf file 
+	2. Kube-DNS and CoreDNS are two established DNS solutions for defining DNS naming rules and resolving pod and service DNS to their corresponding cluster IPs. With DNS, Kubernetes services can be referenced by name that will correspond to any number of backend pods managed by that service.
+
+	End points
+	-----------
+	• Endpoints track the IP Addresses of the objects the service send traffic to
+	• When a service selector matches a pod label, that IP Address is added to your endpoints
+		• The endpoints for a service can be found by
+		▪ kubectl describe svc <service-name>
+		▪ kubectl get ep <service-name>
+	From our earlier example, get endpoints for the service clusterip-flask
+	kubectl get ep clusterip-flask or kubectl describe svc clusterip-flask
+
+
+Multi-Port Services
+********************
+	kubectl apply -f multiport-svc.yml
+
+	Run a temporary pod and curl multiport-svc service 
+	kubectl run nginx --rm -it --image=nginx -- sh
+
+
+		$ cat multiport-svc.yml 
+		apiVersion: v1
+		kind: Pod
+		metadata:
+		  name: multicontainer-pod
+		  Labels: 
+		    app: MyApp
+		spec:
+		  containers:
+		  - name: nginx-container 
+		    image: kunchalavikram/hello-nginx 
+		    ports:
+		    - containerPort: 80
+		  - name: flask-container
+		    image: kunchalavikram/hello-flaskv
+		    ports: 
+		    - containerPort: 5000
+		---    
+		apiVersion: v1
+		kind: Service
+		metadata:
+		  name: multiport-svc
+		spec:
+		  selector:
+		    app: MyApp
+		  ports:
+		  - name: nginx 
+		    protocol: TCP
+		    port: 80
+		    targetPort: 80
+		  - name: flask 
+		    protocol: TCP
+		    port: 5000
+		    targetPort 5000
+
+	kubectl exec
+	************
+	• The kubectl exec command allows us to run arbitrary inside an existing container of a pod
+	• The double dash (--) in the command signals the end of command options for kubectl and marks the beginning of the command that should be executed inside the pod
+
+
+	From our earlier demo of Multi-Port services, lets get into shell of nginx container and curl flask container running on port 5000
+
+	kubectl exec -it multicontainer-pod -c nginx-container -- sh
+	/ # curl localhost  #we know that containers within the same pod can communicate on localhost
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Service Discovery
+*****************
+Service Discovery
+	• Client pods that need to communicate with certain backend pods uses Service's IP or Name 
+	• But, how do these service names resolve to a service IP?
+	• Kubernetes supports two modes of service discovery: through Environment variables and DNS
+
+Environment Variables
+---------------------
+	• When a pod is scheduled to a node, the kubelet provides the pod with the necessary information to access services through environment variables 
+	• Since we have already created a service called web-app in our previous demo, the newly created temporary pod will have this service IP and Port injected as a set of environment variables
+	• But, this is not the most reliable way to discover services. In order to inject those environment variables to the pod, the service must be created before the pod creation. So, if the service was recreated for any reason after the pods are already running, they won't have access to those new/updated environment variables and service discovery will fail!
+
+
+
+
+
+DNS
+----
+	• Get the cluster IP of kube-snd service
+	kubectl get service/kube-dns -n kube-system
+
+	• Run a temporary pod and see the DNS server details and how the pod resolves web-app service created earlier
+
+	kubectl run nginx --rm -it --image=nginx -- sh
+	install nslookup in nginx using
+	apt update -y
+	apt install dnsutils
+
+	kubectl run web-app --image=nginx 
+
+	• Now, run a temporary pod in dev namespace and see how the pod resolves web-app service created earlier 
+
+	kubectl run nginx --rm -it --image=nginx -n dev -- sh
+
+	• Now both pod and service are in different namespaces
+	• In order to communicate with service which is in different namespace, we should use FQDN, otherwise DNS query doesn't resolve
+
+
+Service Discovery: CoreDNS
+**************************
+	• A service created in a namespace can be accessed by pods in the same namespace using <service-name>:<service-port> (if service listens on 80, ignore service port in the name)
+	• If the pods are in a different namespace, then the pod must use the fully qualified name(FQDN) for the service like <service-name.namespace.svc.cluster.local>
+	• Each pod gets the DNS server configured in the resolv.conf file at /etc/resolve.conf
+
+
+
+
+Kube-proxy iptables rules
+**************************
+	• kube-proxy creates iptables rules for Kubernetes services which ensure that the request to the service gets routed (and load balanced) to the appropriate pods
+	• Each time a service is created/deleted or the endpoints are modified due to the scaling of the related deployment, kube-proxy is responsible for updating the iptables rules on each node of the cluster
+
+
+	kubectl create deploy nginx --image=nginx --port=80 --replicas=3 
+	kubectl expose deploy nginx --port=80 --target-port=80 --type=NodePort
+
+	kubectl get deploy,svc,ep,po -o wide

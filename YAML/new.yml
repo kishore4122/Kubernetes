@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: 
+  label:
+spec:
+  containers:
+    name:
+    image:
+    command:
+    workingDir:
+    ports:
+    volumeMounts:
+    env:
+    resources:
+    livenessProbe:
+    readinessProbe:

@@ -1,0 +1,185 @@
+Cluster Setup on AWS using Kubeadm
+***********************************
+	- A compatible Linux host
+	- 2 GB or more of RAM per machine and 2 CPUs or more
+	- Full network connectivity between all machines in the cluster 
+	- Unique hostname, MAC address for each node 
+	- Certain ports are open on your machines
+	- Swap disabled. You MUST disable swap for the kubelet to work properly 
+	- Docker to be installed on all machines
+
+	https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
+
+
+BareMetal Kubernetes cluster Setup on AWS Using Kubeadm
+*******************************************************
+	- Current Kubernetes Version is v1.22
+	- If you are using bare-metal servers or virtual machines (VMs), Kubeadm is a good fit
+	- If you're running on cloud environments, kops and Kubespray can ease Kubernetes installation, as well as integration with the cloud providers.
+	- If you want to drop the burden of managing the Kubernetes control plane, almost all cloud providers have their Kubernetes managed services, such as Google Kubernetes Engine (GKE), Amazon Elastic Kubernetes Service (EKS), Azure Kubernetes Service (AKS) etc
+	- If you just want a playground to study Kubernetes, Minikube and Kind can help you spin up a Kubernetes cluster in minutes.
+	- Browser based labs: https://www.katacoda.com/courses/kubernetes
+
+https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
+
+Prerequisites
+**************
+	- A compatible Linux hosts
+	- 2 GB or more of RAM per machine and 2 CPUs or more
+	- 4-Ubuntu Serves
+		o 1x Manager (4GB RAM, 2 vCPU) t2.medium type 
+		o 3x Workers (1 GB, 1 Core) t2.micro type
+	- Full network connectivity between all machines in the cluster
+	- Unique hostname, MAC address for each host. Change hostname of the servers at /etc/hostname or using hostnamectl. Use Master for Master nodes and 	worker_01, worker_02 and so on for worker nodes
+	- Swap disabled. You MUST disable swap in order for the kubelet to work properly 
+	- Certain ports are open on your machines(https://kubernetes.io/docs/reference/ports-and-protocols/)
+
+	Master
+	------ 
+	Port range 		Purpose
+	6443 			These ports are used for Kubernetes API access. 
+	2379-2380		These ports are used for etcd server client API
+	6783/tcp,6784/udp for Weavenet
+	10250 			This port is used for Kubelet API
+	10259			This port is used for kube-scheduler
+	10257 			This port is used for kube-controller-manager
+	10255			Read-Only Kubelet API
+	10248 			Kubelet health 
+	80 				For accessing demo apps 
+	8080 
+	443
+	30000-32767		Node Port Range (for worker nodes)
+
+	Worker
+	------ 
+	Port range 			Purpose
+	10250 				This port is used for Kubelet API 
+	10255 				Read-Only Kubelet API 
+	30000-32767 		NodePort Services 
+	6783/tcp,6784/udp 	for Weavenet 
+	80
+	6443
+	22
+	10250-10260
+	30000-32767
+
+Commom Steps for Master and Workers
+-----------------------------------
+	1. Run all commands as sudo
+	2. Install Docer and required packages
+		$sudo su
+		$apt update -y 
+		$apt install apt-transport-https ca-certificates  curl software-properties-common
+
+		$sudo apt-get update
+		$sudo apt-get install \
+    		ca-certificates \
+    		curl \
+    		gnupg \
+    		lsb-release
+    	$sudo mkdir -p /etc/apt/keyrings
+    	$curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+    	$echo \
+  			"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+ 			$(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+ 		$sudo apt-get update
+ 		$sudo apt-get install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+ 		$apt-cache madison docker-ce
+
+ 	3. Configure the Docker daemon, in particular to use systemd for the management of the containers cgroups
+
+ 		$mkdir /etc/docker
+ 		$cat << EOF | sudo tee /etc/docker/daemon.json
+ 		{
+ 			"exec-opts": ["native.cgroupdriver=systemd"]
+ 		} 
+ 		EOF
+
+ 		$systemctl enable --now docker
+ 		$usermod -aG docker ubuntu
+ 		$systemctl restart docker
+
+ 	4. Turn off Swap Space
+ 		$swapoff -a
+
+ 		$sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+
+ 	5. Ensure net.bridge.bridge-nf-call-iptables is set to 1 in your sysctl config (https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#letting-iptables-see-bridged-traffic) 
+
+		$sysctl net.bridge.bridge-nf-call-iptables=1
+
+	6. Install kubectl, kubelet and kubeadm
+		$sudo apt-get update && sudo apt-get install -y apt-transport-https curl
+		$curl -s apt-key add- https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+		
+		$cat <<EOF | sudo tee /etc/apt/sources.list.d/kubernetes.list deb https://apt.kubernetes.io/ kubernetes-xenial main 
+		EOF
+		
+		$sudo apt-get update -y
+		$sudo apt-get install -y kubelet kubeadm kubectl
+
+	7. apt-mark hold is used so that these packages will not be updated/removed automatically
+		$sudo apt-mark hold kubelet kubeadm kubectl
+
+	8. Setup kubectl autocompletion
+		$echo "source <(kubectl completion bash)" >> ~/.bashrc
+
+On Master node
+--------------
+	1. Start the cluster using Kubeadm init. This will print a join token. Take backup of thattoken
+		
+		$kubeadm config images pull
+		$kubeadm init
+
+	2. Save the kube config to ubuntu's home directory. Switch to ubuntu or type exit from root mode
+
+		$mkdir -p $HOME/.kube
+		$sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config 
+		$sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+		Alternatively, if you are the root user, you can run:
+		$export KUBECONFIG=/etc/kubernetes/admin.conf
+
+	3. Install any CNI plugin
+		https://kubernetes.io/docs/concepts/cluster-administration/addons/
+
+		$kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+
+On Slave node
+-------------
+	1. Copy the join token obtained from kubeadm init output to all Workers node and run it. Example
+		$kubeadm join \192.168.56.2:6443 --token--discovery-token-ca-cert-hash sha256:....
+
+
+Test the Setup
+--------------
+	1. On Master node, run
+		$kubectl get nodes
+
+Demo APP
+--------
+	$kubectl run nginx --image=nginx --port=80 
+	$kubectl expose pod nginx --port=80-type=NodePort
+
+	Go to browser, visit http://<master-ip>:<NodePort> to check the nginx default page. 
+	Make sure the port range 30000-32767 is opened on all/master node
+
+	$kubectl get pods
+	$kubectl get svc
+	
+
+
+Setup Dashboard
+----------------
+ K8dash/Skooner: https://github.com/skooner-k8s/skooner
+
+References
+-----------
+	https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-
+	https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-kubeadm/cluster-kubeadm/
+	https://www.mirantis.com/blog/how-install-kubernetes-kubeadm/ 
+	https://kubernetes.io/docs/setup/production-environment/container-runtimes/#docker
+	https://www.weave.works/docs/net/latest/kubernetes/kube-addon/#install
+	https://github.com/skooner-kös/skooner

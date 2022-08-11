@@ -1,0 +1,12 @@
+Kubernetes Objects:
+********************
+
+	compute					Network				Storage
+	-------					-------				-------
+	Node					Service				Volume
+	Pod						Ingress				PersistentVolume
+	Namespace									StorageClass
+	Deployment									PersistentVolumeClaim
+	ReplicaSet
+	StatefulSet
+	DaemonSet

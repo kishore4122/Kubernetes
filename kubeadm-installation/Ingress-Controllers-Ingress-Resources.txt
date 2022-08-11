@@ -1,0 +1,382 @@
+Ingress Controller
+******************
+	• Ingress is probably the most powerful way to expose the services outside the cluster
+	• It expose multiple services, as shown in the image, under the same IP address
+	• Note that an Ingress Controller typically doesn't eliminate the need for an external load balancer- the ingress controller simply adds an additional layer of routing and control behind the load balancer
+	• You only pay for one load balancer IP if you are using any cloud native load balancer and Ingress is smart enough to route various requests using simple Host or URL based routing
+	• From the image, both app1.com and app2.com point to the same load balancer IP. The Ingress controller routes the traffic from app1.com to its corresponding service inside the cluster. The same is true for app2.com. This smart routing is made possible through Ingress rules
+	• This way we have avoided having multiple IPs for each exposed service.
+
+	Ingress Controller (is a live running pod)
+	Ingress Resources (is a configuration file or Ingress Rules)
+
+
+	• Ingress controllers doesn't come with standard Kubernetes binary, they have to be deployed separately
+	• They are generally implemented by a third party proxy that can read the Ingress rules and adjust its configuration accordingly
+	• There are many types of Ingress controllers like AWS ALB, Traefik, Nginx, Contour, Istio etc
+	• There are also plugins for Ingress controllers, like the cert-manager, that can automatically provision SSL certificates for the services
+	• Ingress controllers also provide features such as SSL and Auth straight out of the box
+	• If you are running the cluster on-prem, Ingress controllers are to be exposed via a NodePort and use a proxy between DNS server and Ingress controller, unless we have other solutions like MetalLB.
+
+
+Ingress Controllers Vs Ingress Resources
+****************************************
+There's often a confusion between Ingress, Ingress Rules, Ingress Resources and Ingress Controllers.
+
+• Ingress/IngressResource/IngressRule: is an API object that manages external access to the services in a cluster, typically HTTP. It provide load balancing, SSL termination and name-based virtual hosting. It exposes HTTP and HTTPS routes from outside the cluster to services within the cluster. Traffic routing is controlled by rules defined by the Ingress Rules. An Ingress does not expose arbitrary ports or protocols. Exposing services are done using NodePort or LoadBalancer
+
+• Ingresscontroller: is the one that is responsible for implementing all the Ingress rules, usually with a load balancer, to help handle the traffic
+
+
+
+Ingress Rules/Resources
+***********************
+• Ingress exposes HTTP and HTTPS routes from outside the cluster to services within the cluster 
+• Traffic routing is controlled by rules defined in the Ingress resource
+• Ingress resources cannot do anything on their own. We need to have an Ingress controller in order for the Ingress resources to work. Thus, Ingress controller implements rules defined by Ingress resources
+
+Path based routing
+------------------
+• In Path based routing, no host is specified, so the rule applies to all inbound HTTP traffic through the ingress controller
+• Every path is associated with a backend service of Cluster IP type and a port on which the service listens on
+• PathType is mandatory and supports 'Exact' and 'Prefix' types. Refer https://kubernetes.io/docs/concepts/services-networking/ingress/#path-types
+• A default Backend is often configured in an Ingress controller to service any requests that do not match a path in the spec, typically custom 404 pages. It is not defined in Ingress Rules
+
+Examples
+Kind		Path(s) 	Request path(s) 	 Matches?
+Exact		/foo/ 		/foo 					No
+Pref 		/fo 		/fo, /foo/ 				Yes
+
+example 1
+-----------
+	aptverston: networking.k8s.to/vibetal 
+	kind: Ingress 
+	metadata:
+	  name: ingress-rules
+	spec:
+	  rules:
+	  - host:
+	    http:
+		  paths:
+		  - path: /nginx 
+			backend:
+			  serviceName: nginx-service 
+			  servicePort: 80
+		  - path: /flask
+			backend:
+			  serviceName: flask-service
+			  servisePort:80
+
+example 2
+---------
+	apiVersion: networking.k8s.io/
+	kind: Ingress 
+	metadata: 
+	  name: flask-ingress-rules
+	spec:
+	  ingressClassName: nginx
+	  rules:
+	  - host:
+	    http: 
+	      paths: 
+		  - pathType: Prefix 
+			path: / 
+			backend:
+			  service:
+				name: flask-hello
+				port: 
+				  number: 80
+		  - path: /alexa
+			pathType: Prefix
+			backend:
+			  service:
+				name: flask-greet
+				port:
+				  number: 80
+		  - path: /details
+			pathType: Prefix 
+			backend:
+			  service:
+				name: flask-details
+				port:
+				  number: 80
+	
+
+
+
+Host Based (Name Based) Routing
+------------------=
+• In Name/URL based routing, all inbound HTTP traffic through the ingress controller are routed according to the host URL
+• Ingress controller matches the host URL in the HTTP header to match the requests with the ingress rules
+
+example 1
+---------
+	apiVersion: networking.k8s.io/vlbetal 
+	kind: Ingress
+	metadata:
+	  name: ingress-rules
+	spec:
+	  rules:
+	  - host: nginx-app.com 
+		http: 
+		  paths: 
+		  - backend:
+			serviceName: nginx-service 
+			servicePort: 80 
+	  - host: flask-app.com
+		http: 
+		  paths:
+		  - backend:
+			serviceName: flask-service 
+			servicePort: 80
+
+example 2
+---------
+
+	apiVersion: networking.k8s.io/v1
+	kind: Ingress 
+	metadata:
+	  name: url-based-rules
+	spec:
+	  ingressClassName: nginx
+	  rules:
+	  - host: flask-hello.com
+	    http: 
+		  paths:
+		  - pathType: Prefix 
+			path: "/"
+			backend:
+			  service:
+				name: flask-hello
+				port: 
+				  number: 80
+	  - host: flask-greet.com
+		http: 
+		  paths: 
+		  - pathType: Prefix
+			path: "/" 
+			backend:
+			  service:
+				name: flask-greet
+				port:
+				  number: 80
+	
+
+
+
+
+NOTE: These are older syntaxes for Ingress Resources that support beta API networking.k8s.io/vibetal
+
+		The latest API version networking.k8s.io/v1 support a different syntax as shown next.
+		Check which API is support by you kubernetes version
+
+Ingress Class
+*************
+	• Ingresses can be implemented by different controllers, such as Nginx, Traefik etc, often with different configuration
+	• Each Ingress should specify a class, a reference to an IngressClass resource that contains additional configuration including the name of the controller that should implement the class
+
+	Without ingress class, ingress controller will not evaluate the ingress rules
+
+		error="ingress does not contain a valid IngressClass" (without Ingress Class)
+
+		"Configuration changes detected, backend reload required" (after adding Ingress Class)
+
+
+
+
+Nginx Ingress Controller(IC)
+****************************
+• Nginx Ingress controller supports all sorts of Kubernetes installations like 
+▪ Docker for Mac
+▪ minikube 
+▪ microk8s 
+▪ AWS
+▪ GCE - GKE
+▪ Azure
+▪ Digital Ocean 
+▪ Scaleway 
+▪ Bare-metal
+
+More info at https://github.com/kubernetes/ingress-nginx/blob/master/docs/deploy/index.md
+
+
+Deploy Nginx IC on Bare-Metal
+*****************************
+• Deploy nginx ingress controller in bare-metal using NodePort
+• https://github.com/kubernetes/ingress-nginx/blob/master/docs/deploy/index.md#bare-metal
+
+	kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v0.44.0/deploy/static/provider/baremetal/deploy.yaml
+
+Verify if all resources for the Nginx IC like Pods, are up and running
+	kubectl get all -n ingress-nginx
+
+
+For more: https://kubernetes.github.io/ingress-nginx/deploy/
+
+
+
+practice example (application_deployment_service.yml)
+----------------
+	apiVersion: v1
+	kind: Pod
+	metadata:
+	  name: hello
+	  labels:
+		app: hello
+	spec:
+	  containers:
+	  - name: hello-container
+		image: kunchalavikram/flask-simplehello:v1 
+		ports:
+		  containerPort: 5000
+	---
+	apiVersion: v1
+	kind: Service
+	metadata:
+	  name: hello
+	spec:
+	  type: Cluster IP
+	  ports:
+	  - name: http 
+		port: 80
+		targetPort: 5000 
+		protocol: TCP
+	  selector:
+	    app: hello
+	---
+	apiVersion: v1
+	kind: Pod
+	metadata:
+	  name: greet
+	  labels:
+		app: greet
+	spec:
+	  containers:
+	  - name: greet-container
+		image: kunchalavikram/flask-simplegreet:v1 
+		ports:
+		  containerPort: 5000
+	---
+	apiVersion: v1
+	kind: Service
+	metadata:
+	  name: greet
+	spec:
+	  type: Cluster IP
+	  ports:
+	  - name: http 
+		port: 80
+		targetPort: 5000 
+		protocol: TCP
+	  selector:
+	    app: greet
+	---
+	apiVersion: v1
+	kind: Pod
+	metadata:
+	  name: details
+	  labels:
+		app: details
+	spec:
+	  containers:
+	  - name: details-container
+		image: kunchalavikram/flask-simpledetails:v1 
+		ports:
+		  containerPort: 5000
+	---
+	apiVersion: v1
+	kind: Service
+	metadata:
+	  name: details
+	spec:
+	  type: Cluster IP
+	  ports:
+	  - name: http 
+		port: 80
+		targetPort: 5000 
+		protocol: TCP
+	  selector:
+	    app: details
+
+
+kubectl apply -f application_deployment_service.yml
+
+pod_based_routing.yml
+---------------------
+	apiVersion: networking.k8s.io/v1 
+	kind: Ingress
+	metadata:
+	  name: flask-ingress-rules
+	spec:
+	  ingressClassName: nginx
+	   rules:
+	   - host:
+		 http:
+		   paths:
+		   - pathType: Prefix
+			 path: /
+			 backend:
+			 	service:
+				  name: hello
+				  port:
+				    number: 80
+		   - path: /vikram 
+			 pathType: Prefix
+			 backend:
+			 	service:
+				  name: greet
+				  port:
+				    number: 80
+		   - path: /details 
+			 pathType: Prefix
+			 backend:
+			 	service:
+				  name: details
+				  port:
+				    number: 80
+
+
+ we can get the ingressClassName by search 
+ 	kubectl api-resources | grep -i class
+
+ 	kubectl get ingressclassess
+
+
+ kubectl apply -f pod_based_routing.yml
+
+ To view all the rules applied:
+ 	kubectl get ingress
+
+ 	kubectl descrine ingress <ingress-name>
+
+
+
+
+
+Are Ingress Controllers any different from Reverse Proxy servers? No!
+**********************************************************************
+• Reverse proxy servers like Nginx, need a proper configuration to redirect requests to backends/other servers depending upon the request
+• Every time the backends change, the configuration has to be modified accordingly 
+• So, when we add new services to the cluster, we need to configure the proxy_pass to proxy the requests to correct backend services
+
+	server { 
+	  server_name grafana. infra; 
+	  listen 80;
+
+	  location / {
+		proxy pass http://grafana;
+	  }
+	}
+
+• With Ingress, these redirect rules in the form of Ingress Resources/Rules, are automatically loaded by the Ingress controller which is serving as a Reverse Proxy
+• It is nothing but a preconfigured Reverse proxy server that always watches for any configuration changes in the cluster
+• So, when a user deploys new Ingress Resources, Ingress controller automatically adds it to its configuration
+
+
+Path Based Routing
+-------------------
+Check the configuration of Ingress controller
+	kubect1 exec -it ingress-nginx-controller-67897c9494-tx194 -n ingress-nginx -- sh
+	
+	cat nginx.conf | grep -A10 /details
+

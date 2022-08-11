@@ -1,0 +1,14 @@
+LENS
+****
+1. Lens is a GUI to manage your Kubernetes clusters 
+2. Multi-cluster management
+3. Standalone application 
+4. Real-time monitoring
+5. Resource utilization charts and trends
+6. Terminal access to nodes and containers
+7. Use kubeconfig files to connect to the clusters 
+8. Helm charts management
+9. 1-click objects deployment through YAML templates
+10. Available for Linux, macOS, and Windows
+
+https://k8slens.dev/

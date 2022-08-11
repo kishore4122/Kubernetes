@@ -1,0 +1,3 @@
+Setup Dashboard
+----------------
+    K8dash/Skooner: https://github.com/skooner-k8s/skooner
